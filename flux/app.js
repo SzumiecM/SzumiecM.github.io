@@ -11,7 +11,7 @@ let state = {
     currentStation: null,
     isPlaying: false,
     httpsOnly: true,
-    showTech: false, // New State for Tech Toggle
+    showTech: false,
     view: 'search'
 };
 
@@ -26,7 +26,7 @@ const els = {
     volIcon: document.getElementById('vol-icon'),
     httpsToggle: document.getElementById('https-toggle'),
     viewToggle: document.getElementById('view-toggle'),
-    techToggle: document.getElementById('tech-toggle'), // New Button
+    techToggle: document.getElementById('tech-toggle'),
     playerImg: document.getElementById('player-img'),
     playerTitle: document.getElementById('player-title'),
     playerMeta: document.getElementById('player-meta'),
@@ -45,14 +45,12 @@ function init() {
     els.searchBtn.addEventListener('click', () => searchStations(els.input.value, 'name'));
     els.input.addEventListener('keydown', (e) => e.key === 'Enter' && searchStations(els.input.value, 'name'));
     
-    // Tag Buttons
     document.querySelectorAll('.tags button').forEach(btn => {
         btn.addEventListener('click', () => {
             searchStations(btn.dataset.search, btn.dataset.type);
         });
     });
 
-    // Player Controls
     els.playBtn.addEventListener('click', togglePlay);
     els.volSlider.addEventListener('input', handleVolumeChange);
     
@@ -99,17 +97,23 @@ function init() {
         els.playerMeta.style.color = "var(--danger)";
     });
 
-    // Setup Media Session
     if ('mediaSession' in navigator) {
         navigator.mediaSession.setActionHandler('play', () => state.audio.play());
         navigator.mediaSession.setActionHandler('pause', () => state.audio.pause());
     }
     
-    // Load Top Stations on start
     searchStations('', 'top');
 }
 
 // --- Logic ---
+
+// Helper: Fixes "null" string bugs from API
+function getStationImage(url) {
+    if (!url || url === "null" || url === "undefined" || url.trim() === "") {
+        return DEFAULT_IMG;
+    }
+    return url;
+}
 
 async function searchStations(term, type) {
     if (type === 'top') els.input.value = '';
@@ -157,13 +161,14 @@ function renderGrid(stations) {
         card.className = `station-card ${isActive ? 'playing' : ''} ${state.showTech ? 'expanded' : ''}`;
         card.onclick = () => playStation(station);
 
-        // Header Row (Image + Info + Fav)
+        // Header Row
         const headerRow = document.createElement('div');
         headerRow.className = 'card-header';
 
         const img = document.createElement('img');
         img.className = 'card-img';
-        img.src = station.favicon || DEFAULT_IMG;
+        // USE HELPER HERE
+        img.src = getStationImage(station.favicon);
         img.onerror = () => img.src = DEFAULT_IMG;
 
         const info = document.createElement('div');
@@ -194,17 +199,16 @@ function renderGrid(stations) {
         headerRow.appendChild(btn);
         card.appendChild(headerRow);
 
-        // Tech Details Row (Conditional)
+        // Tech Details
         if (state.showTech) {
             const techRow = document.createElement('div');
             techRow.className = 'tech-details';
             
-            // Safe rendering of tech specs
             techRow.innerHTML = `
                 <div class="tech-item"><span>Bitrate:</span> ${station.bitrate} kbps</div>
                 <div class="tech-item"><span>Codec:</span> ${station.codec}</div>
                 <div class="tech-item"><span>Clicks:</span> ${station.clickcount}</div>
-                <div class="tech-item full"><span>Stream:</span> <a href="#" onclick="return false;">${station.url_resolved}</a></div>
+                <div class="tech-item full"><span>Stream:</span> <a href="${station.url_resolved}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">${station.url_resolved}</a></div>
             `;
             
             card.appendChild(techRow);
@@ -226,17 +230,16 @@ function playStation(station) {
     state.currentStation = station;
     els.player.classList.remove('hidden');
     
-    // UI Updates
     els.playerTitle.textContent = station.name;
     els.playerMeta.textContent = "Connecting...";
     els.playerMeta.style.color = "var(--text-dim)";
     
-    els.playerImg.src = station.favicon || DEFAULT_IMG;
+    // USE HELPER HERE
+    els.playerImg.src = getStationImage(station.favicon);
     els.playerImg.onerror = () => els.playerImg.src = DEFAULT_IMG;
 
     renderGrid(state.view === 'favorites' ? state.favorites : state.stations);
 
-    // Audio Playback
     state.audio.src = station.url_resolved;
     state.audio.load();
     state.audio.play().catch(e => {
@@ -248,7 +251,7 @@ function playStation(station) {
         navigator.mediaSession.metadata = new MediaMetadata({
             title: station.name,
             artist: station.tags || 'Live Radio',
-            artwork: [{ src: station.favicon || DEFAULT_IMG }]
+            artwork: [{ src: getStationImage(station.favicon) }]
         });
     }
 }
@@ -302,5 +305,4 @@ function updateVolumeIcon(val) {
     lucide.createIcons({ root: els.player });
 }
 
-// Start
 init();
