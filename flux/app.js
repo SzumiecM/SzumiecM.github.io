@@ -21,7 +21,6 @@ let state = {
     volume: parseFloat(localStorage.getItem('flux_volume')) || 1.0,
     currentStation: null,
     isPlaying: false,
-    httpsOnly: false, // Default to false so Radio Zet works
     showTech: false,
     view: 'search'
 };
@@ -35,7 +34,7 @@ const els = {
     playBtn: document.getElementById('play-pause-btn'),
     volSlider: document.getElementById('volume-slider'),
     volIcon: document.getElementById('vol-icon'),
-    httpsToggle: document.getElementById('https-toggle'),
+    // Removed httpsToggle from here
     viewToggle: document.getElementById('view-toggle'),
     techToggle: document.getElementById('tech-toggle'),
     playerImg: document.getElementById('player-img'),
@@ -52,9 +51,6 @@ function init() {
     els.volSlider.value = state.volume;
     updateVolumeIcon(state.volume);
 
-    // Sync toggle UI with state (Fix for the crash)
-    updateHttpsButtonUI();
-
     // Event Listeners
     els.searchBtn.addEventListener('click', () => searchStations(els.input.value, 'name'));
     els.input.addEventListener('keydown', (e) => e.key === 'Enter' && searchStations(els.input.value, 'name'));
@@ -69,24 +65,6 @@ function init() {
     els.volSlider.addEventListener('input', handleVolumeChange);
     
     // Toggles
-    els.httpsToggle.addEventListener('click', () => {
-        state.httpsOnly = !state.httpsOnly;
-        
-        // Update UI
-        updateHttpsButtonUI();
-        
-        // Refresh the search if we are currently searching
-        if (state.view === 'search') {
-             if(state.stations.length > 0) {
-                 const status = document.createElement('div');
-                 status.className = 'status-msg';
-                 status.textContent = 'Filter changed. Search again to apply.';
-                 els.grid.innerHTML = '';
-                 els.grid.appendChild(status);
-             }
-        }
-    });
-
     els.viewToggle.addEventListener('click', () => {
         state.view = state.view === 'search' ? 'favorites' : 'search';
         els.viewToggle.classList.toggle('active', state.view === 'favorites');
@@ -118,6 +96,7 @@ function init() {
         console.error("Audio Error:", e);
         
         if (state.audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+             // This often happens with HTTP streams on HTTPS sites
              els.playerMeta.textContent = "Stream Offline / Blocked";
         } else {
              els.playerMeta.textContent = "Connection Lost";
@@ -135,16 +114,6 @@ function init() {
 }
 
 // --- Logic ---
-
-function updateHttpsButtonUI() {
-    els.httpsToggle.classList.toggle('active', state.httpsOnly);
-    // FIX: Don't look for a span. Rebuild innerHTML safely.
-    const text = state.httpsOnly ? ' Secure' : ' All';
-    els.httpsToggle.innerHTML = `<i data-lucide="zap"></i>${text}`;
-    // Re-render the icon inside the button
-    if (window.lucide) lucide.createIcons({ root: els.httpsToggle });
-}
-
 function getStationImage(url) {
     if (!url || url === "null" || url === "undefined" || url.trim() === "") {
         return DEFAULT_IMG;
@@ -160,13 +129,13 @@ async function searchStations(term, type) {
     els.viewToggle.classList.remove('active');
 
     const limit = 50;
-    const protocol = state.httpsOnly ? '&protocol=https' : '';
+    // Removed protocol filter. Now we fetch everything.
     let url = '';
 
     if (type === 'top') {
-        url = `${API_BASE}?limit=${limit}&order=clickcount&reverse=true${protocol}`;
+        url = `${API_BASE}?limit=${limit}&order=clickcount&reverse=true`;
     } else {
-        url = `${API_BASE}?${type}=${encodeURIComponent(term)}&limit=${limit}&order=clickcount&reverse=true${protocol}`;
+        url = `${API_BASE}?${type}=${encodeURIComponent(term)}&limit=${limit}&order=clickcount&reverse=true`;
     }
 
     try {
