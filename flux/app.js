@@ -199,20 +199,49 @@ function renderGrid(stations) {
         headerRow.appendChild(btn);
         card.appendChild(headerRow);
 
-        // Tech Details
+        // Tech Details - [PATCHED SECTION]
         if (state.showTech) {
             const techRow = document.createElement('div');
             techRow.className = 'tech-details';
+
+            // Helper to create safe elements
+            const createItem = (label, value) => {
+                const div = document.createElement('div');
+                div.className = 'tech-item';
+                
+                const span = document.createElement('span');
+                span.textContent = label + ': ';
+                
+                div.appendChild(span);
+                div.append(value || 'N/A'); // Appends text, not HTML
+                return div;
+            };
+
+            techRow.appendChild(createItem('Bitrate', `${station.bitrate} kbps`));
+            techRow.appendChild(createItem('Codec', station.codec));
+            techRow.appendChild(createItem('Clicks', station.clickcount));
+
+            // Stream Link (Handled separately for attributes)
+            const streamDiv = document.createElement('div');
+            streamDiv.className = 'tech-item full';
             
-            techRow.innerHTML = `
-                <div class="tech-item"><span>Bitrate:</span> ${station.bitrate} kbps</div>
-                <div class="tech-item"><span>Codec:</span> ${station.codec}</div>
-                <div class="tech-item"><span>Clicks:</span> ${station.clickcount}</div>
-                <div class="tech-item full"><span>Stream:</span> <a href="${station.url_resolved}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">${station.url_resolved}</a></div>
-            `;
+            const streamLabel = document.createElement('span');
+            streamLabel.textContent = 'Stream: ';
+            
+            const link = document.createElement('a');
+            link.href = station.url_resolved;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = station.url_resolved;
+            link.onclick = (e) => e.stopPropagation();
+
+            streamDiv.appendChild(streamLabel);
+            streamDiv.appendChild(link);
+            techRow.appendChild(streamDiv);
             
             card.appendChild(techRow);
         }
+        // [END PATCH]
 
         fragment.appendChild(card);
     });
