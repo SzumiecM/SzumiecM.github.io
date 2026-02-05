@@ -45,7 +45,7 @@ const els = {
 
 // --- Initialization ---
 function init() {
-    lucide.createIcons();
+    if (window.lucide) lucide.createIcons();
 
     // Set initial volume
     state.audio.volume = state.volume;
@@ -71,9 +71,9 @@ function init() {
         els.httpsToggle.classList.toggle('active', state.httpsOnly);
         els.httpsToggle.querySelector('span').textContent = state.httpsOnly ? 'Secure' : 'All';
         
+        // UX: Clear grid if settings change to avoid confusion
         if (state.view === 'search' && state.stations.length > 0) {
-           const activeTag = document.querySelector('.tags button:hover');
-           if(!activeTag) els.grid.innerHTML = '<div class="status-msg">Settings changed. Please search again.</div>';
+             els.grid.innerHTML = '<div class="status-msg">Filter changed. Please search again.</div>';
         }
     });
 
@@ -102,9 +102,17 @@ function init() {
 
     state.audio.addEventListener('pause', updatePlayerState);
     
-    state.audio.addEventListener('error', () => {
+    // Generic error fallback (network loss etc)
+    state.audio.addEventListener('error', (e) => {
         els.playBtn.classList.remove('loading');
-        els.playerMeta.textContent = "Stream Offline / Error";
+        console.error("Audio Error:", e);
+        // We handle specific play() promise errors in playStation()
+        // This listener catches drops during playback
+        if (state.audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+             els.playerMeta.textContent = "Stream Offline / Blocked";
+        } else {
+             els.playerMeta.textContent = "Connection Lost";
+        }
         els.playerMeta.style.color = "var(--danger)";
     });
 
@@ -113,12 +121,12 @@ function init() {
         navigator.mediaSession.setActionHandler('pause', () => state.audio.pause());
     }
     
+    // Start with a default search
     searchStations('', 'top');
 }
 
 // --- Logic ---
 
-// Helper: Fixes "null" string bugs from API
 function getStationImage(url) {
     if (!url || url === "null" || url === "undefined" || url.trim() === "") {
         return DEFAULT_IMG;
@@ -134,6 +142,8 @@ async function searchStations(term, type) {
     els.viewToggle.classList.remove('active');
 
     const limit = 50;
+    // Note: We request HTTPS links if available, but the station object returns HTTP if that's all they have.
+    // The strict filtering happens via API query parameters.
     const protocol = state.httpsOnly ? '&protocol=https' : '';
     let url = '';
 
@@ -150,7 +160,7 @@ async function searchStations(term, type) {
         renderGrid(data);
     } catch (e) {
         console.error(e);
-        els.grid.innerHTML = '<div class="status-msg" style="color:var(--danger)">Network Error</div>';
+        els.grid.innerHTML = '<div class="status-msg" style="color:var(--danger)">Network Error (Check Console)</div>';
     }
 }
 
@@ -179,16 +189,19 @@ function renderGrid(stations) {
         const img = document.createElement('img');
         img.className = 'card-img';
         img.src = getStationImage(station.favicon);
+        // Error handling for image ensures no broken UI
         img.onerror = () => img.src = DEFAULT_IMG;
 
         const info = document.createElement('div');
         info.className = 'card-info';
 
         const title = document.createElement('h4');
+        // SECURITY: Use textContent to prevent XSS
         title.textContent = station.name;
 
         const meta = document.createElement('p');
         const tagText = (station.tags || '').split(',')[0] || 'Radio'; 
+        // SECURITY: Use textContent
         meta.textContent = `${tagText} • ${station.countrycode || 'WW'}`;
 
         info.appendChild(title);
@@ -223,7 +236,7 @@ function renderGrid(stations) {
                 span.textContent = label + ': ';
                 
                 div.appendChild(span);
-                // Safe text insertion
+                // SECURITY: append() treats strings as text nodes (Safe)
                 div.append(value || 'N/A'); 
                 return div;
             };
@@ -232,15 +245,15 @@ function renderGrid(stations) {
             techRow.appendChild(createItem('Codec', station.codec));
             techRow.appendChild(createItem('Clicks', station.clickcount));
 
-            // Stream Link rendered as Plain Text (Secure)
             const streamDiv = document.createElement('div');
             streamDiv.className = 'tech-item full';
             
             const streamLabel = document.createElement('span');
             streamLabel.textContent = 'Stream: ';
             
-            // Just a text node, no <a> tag, no javascript execution possible
-            const urlText = document.createTextNode(station.url_resolved || 'Unknown URL');
+            // SECURITY: createTextNode ensures URL is rendered as text, not HTML
+            // Using station.url here for consistency with the player
+            const urlText = document.createTextNode(station.url || 'Unknown URL');
 
             streamDiv.appendChild(streamLabel);
             streamDiv.appendChild(urlText);
@@ -253,10 +266,11 @@ function renderGrid(stations) {
     });
 
     els.grid.appendChild(fragment);
-    lucide.createIcons({ root: els.grid });
+    if (window.lucide) lucide.createIcons({ root: els.grid });
 }
 
 function playStation(station) {
+    // If playing the same station, just toggle
     if(state.currentStation?.stationuuid === station.stationuuid && !state.audio.paused) {
         togglePlay();
         return;
@@ -265,6 +279,7 @@ function playStation(station) {
     state.currentStation = station;
     els.player.classList.remove('hidden');
     
+    // SECURITY: textContent
     els.playerTitle.textContent = station.name;
     els.playerMeta.textContent = "Connecting...";
     els.playerMeta.style.color = "var(--text-dim)";
@@ -272,14 +287,29 @@ function playStation(station) {
     els.playerImg.src = getStationImage(station.favicon);
     els.playerImg.onerror = () => els.playerImg.src = DEFAULT_IMG;
 
+    // Refresh grid to show "playing" state
     renderGrid(state.view === 'favorites' ? state.favorites : state.stations);
 
-    state.audio.src = station.url_resolved;
+    // CRITICAL FIX: Use station.url (original) instead of url_resolved.
+    // This allows redirects (HTTPS -> HTTP) to work on some browsers/stations
+    // where resolved IPs would be blocked immediately as Mixed Content.
+    state.audio.src = station.url; 
+    
     state.audio.load();
-    state.audio.play().catch(e => {
-        console.error("Playback failed:", e);
-        els.playerMeta.textContent = "Click Play to Start";
-    });
+    const playPromise = state.audio.play();
+
+    if (playPromise !== undefined) {
+        playPromise.catch(error => {
+            console.error("Playback failed:", error);
+            // Handle Mixed Content / Not Supported errors gracefully
+            if (error.name === 'NotSupportedError' || error.message.includes('supported')) {
+                 els.playerMeta.textContent = "Format Not Supported";
+            } else {
+                 els.playerMeta.textContent = "Stream Blocked (Insecure HTTP)";
+            }
+            els.playerMeta.style.color = "var(--danger)";
+        });
+    }
 
     if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -310,7 +340,7 @@ function updatePlayerState() {
         els.playerMeta.textContent = "Paused";
         els.playerMeta.style.color = "var(--text-dim)";
     }
-    lucide.createIcons({ root: els.player });
+    if (window.lucide) lucide.createIcons({ root: els.player });
 }
 
 function toggleFavorite(station) {
@@ -336,7 +366,7 @@ function updateVolumeIcon(val) {
     if (val == 0) els.volIcon.setAttribute('data-lucide', 'volume-x');
     else if (val < 0.5) els.volIcon.setAttribute('data-lucide', 'volume-1');
     else els.volIcon.setAttribute('data-lucide', 'volume-2');
-    lucide.createIcons({ root: els.player });
+    if (window.lucide) lucide.createIcons({ root: els.player });
 }
 
 init();
