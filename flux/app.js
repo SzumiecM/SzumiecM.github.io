@@ -102,12 +102,11 @@ function init() {
 
     state.audio.addEventListener('pause', updatePlayerState);
     
-    // Generic error fallback (network loss etc)
+    // Generic error fallback (network drops during playback)
     state.audio.addEventListener('error', (e) => {
         els.playBtn.classList.remove('loading');
         console.error("Audio Error:", e);
-        // We handle specific play() promise errors in playStation()
-        // This listener catches drops during playback
+        // Note: Specific play() errors are handled in playStation()
         if (state.audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
              els.playerMeta.textContent = "Stream Offline / Blocked";
         } else {
@@ -143,7 +142,6 @@ async function searchStations(term, type) {
 
     const limit = 50;
     // Note: We request HTTPS links if available, but the station object returns HTTP if that's all they have.
-    // The strict filtering happens via API query parameters.
     const protocol = state.httpsOnly ? '&protocol=https' : '';
     let url = '';
 
@@ -189,7 +187,6 @@ function renderGrid(stations) {
         const img = document.createElement('img');
         img.className = 'card-img';
         img.src = getStationImage(station.favicon);
-        // Error handling for image ensures no broken UI
         img.onerror = () => img.src = DEFAULT_IMG;
 
         const info = document.createElement('div');
@@ -252,8 +249,7 @@ function renderGrid(stations) {
             streamLabel.textContent = 'Stream: ';
             
             // SECURITY: createTextNode ensures URL is rendered as text, not HTML
-            // Using station.url here for consistency with the player
-            const urlText = document.createTextNode(station.url || 'Unknown URL');
+            const urlText = document.createTextNode(station.url_resolved || 'Unknown URL');
 
             streamDiv.appendChild(streamLabel);
             streamDiv.appendChild(urlText);
@@ -270,7 +266,6 @@ function renderGrid(stations) {
 }
 
 function playStation(station) {
-    // If playing the same station, just toggle
     if(state.currentStation?.stationuuid === station.stationuuid && !state.audio.paused) {
         togglePlay();
         return;
@@ -279,7 +274,7 @@ function playStation(station) {
     state.currentStation = station;
     els.player.classList.remove('hidden');
     
-    // SECURITY: textContent
+    // SECURITY: textContent prevents XSS in player
     els.playerTitle.textContent = station.name;
     els.playerMeta.textContent = "Connecting...";
     els.playerMeta.style.color = "var(--text-dim)";
@@ -287,13 +282,11 @@ function playStation(station) {
     els.playerImg.src = getStationImage(station.favicon);
     els.playerImg.onerror = () => els.playerImg.src = DEFAULT_IMG;
 
-    // Refresh grid to show "playing" state
     renderGrid(state.view === 'favorites' ? state.favorites : state.stations);
 
-    // CRITICAL FIX: Use station.url (original) instead of url_resolved.
-    // This allows redirects (HTTPS -> HTTP) to work on some browsers/stations
-    // where resolved IPs would be blocked immediately as Mixed Content.
-    state.audio.src = station.url; 
+    // FIX: Using url_resolved ensures we get audio, not playlist text files.
+    // This fixes "Format Not Supported".
+    state.audio.src = station.url_resolved; 
     
     state.audio.load();
     const playPromise = state.audio.play();
@@ -301,11 +294,17 @@ function playStation(station) {
     if (playPromise !== undefined) {
         playPromise.catch(error => {
             console.error("Playback failed:", error);
-            // Handle Mixed Content / Not Supported errors gracefully
-            if (error.name === 'NotSupportedError' || error.message.includes('supported')) {
-                 els.playerMeta.textContent = "Format Not Supported";
+            
+            // Improved error handling
+            if (state.audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+                // This covers: 404, Offline, and Mixed Content Blocking
+                els.playerMeta.textContent = "Stream Offline / Network Error";
+            } else if (error.name === 'NotSupportedError') {
+                els.playerMeta.textContent = "Format Not Supported";
+            } else if (error.name === 'NotAllowedError') {
+                els.playerMeta.textContent = "Click Play to Start";
             } else {
-                 els.playerMeta.textContent = "Stream Blocked (Insecure HTTP)";
+                els.playerMeta.textContent = "Connection Error";
             }
             els.playerMeta.style.color = "var(--danger)";
         });
