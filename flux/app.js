@@ -21,7 +21,7 @@ let state = {
     volume: parseFloat(localStorage.getItem('flux_volume')) || 1.0,
     currentStation: null,
     isPlaying: false,
-    httpsOnly: true,
+    httpsOnly: false, // Default to false so Radio Zet works
     showTech: false,
     view: 'search'
 };
@@ -52,6 +52,9 @@ function init() {
     els.volSlider.value = state.volume;
     updateVolumeIcon(state.volume);
 
+    // Sync toggle UI with state (Fix for the crash)
+    updateHttpsButtonUI();
+
     // Event Listeners
     els.searchBtn.addEventListener('click', () => searchStations(els.input.value, 'name'));
     els.input.addEventListener('keydown', (e) => e.key === 'Enter' && searchStations(els.input.value, 'name'));
@@ -68,12 +71,19 @@ function init() {
     // Toggles
     els.httpsToggle.addEventListener('click', () => {
         state.httpsOnly = !state.httpsOnly;
-        els.httpsToggle.classList.toggle('active', state.httpsOnly);
-        els.httpsToggle.querySelector('span').textContent = state.httpsOnly ? 'Secure' : 'All';
         
-        // UX: Clear grid if settings change to avoid confusion
-        if (state.view === 'search' && state.stations.length > 0) {
-             els.grid.innerHTML = '<div class="status-msg">Filter changed. Please search again.</div>';
+        // Update UI
+        updateHttpsButtonUI();
+        
+        // Refresh the search if we are currently searching
+        if (state.view === 'search') {
+             if(state.stations.length > 0) {
+                 const status = document.createElement('div');
+                 status.className = 'status-msg';
+                 status.textContent = 'Filter changed. Search again to apply.';
+                 els.grid.innerHTML = '';
+                 els.grid.appendChild(status);
+             }
         }
     });
 
@@ -93,6 +103,7 @@ function init() {
     state.audio.addEventListener('loadstart', () => {
         els.playBtn.classList.add('loading');
         els.playerMeta.textContent = "Buffering...";
+        els.playerMeta.style.color = "var(--text-dim)";
     });
     
     state.audio.addEventListener('playing', () => {
@@ -102,11 +113,10 @@ function init() {
 
     state.audio.addEventListener('pause', updatePlayerState);
     
-    // Generic error fallback (network drops during playback)
     state.audio.addEventListener('error', (e) => {
         els.playBtn.classList.remove('loading');
         console.error("Audio Error:", e);
-        // Note: Specific play() errors are handled in playStation()
+        
         if (state.audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
              els.playerMeta.textContent = "Stream Offline / Blocked";
         } else {
@@ -126,6 +136,15 @@ function init() {
 
 // --- Logic ---
 
+function updateHttpsButtonUI() {
+    els.httpsToggle.classList.toggle('active', state.httpsOnly);
+    // FIX: Don't look for a span. Rebuild innerHTML safely.
+    const text = state.httpsOnly ? ' Secure' : ' All';
+    els.httpsToggle.innerHTML = `<i data-lucide="zap"></i>${text}`;
+    // Re-render the icon inside the button
+    if (window.lucide) lucide.createIcons({ root: els.httpsToggle });
+}
+
 function getStationImage(url) {
     if (!url || url === "null" || url === "undefined" || url.trim() === "") {
         return DEFAULT_IMG;
@@ -141,7 +160,6 @@ async function searchStations(term, type) {
     els.viewToggle.classList.remove('active');
 
     const limit = 50;
-    // Note: We request HTTPS links if available, but the station object returns HTTP if that's all they have.
     const protocol = state.httpsOnly ? '&protocol=https' : '';
     let url = '';
 
@@ -158,7 +176,7 @@ async function searchStations(term, type) {
         renderGrid(data);
     } catch (e) {
         console.error(e);
-        els.grid.innerHTML = '<div class="status-msg" style="color:var(--danger)">Network Error (Check Console)</div>';
+        els.grid.innerHTML = '<div class="status-msg" style="color:var(--danger)">Network Error</div>';
     }
 }
 
@@ -180,7 +198,6 @@ function renderGrid(stations) {
         card.className = `station-card ${isActive ? 'playing' : ''} ${state.showTech ? 'expanded' : ''}`;
         card.onclick = () => playStation(station);
 
-        // Header Row
         const headerRow = document.createElement('div');
         headerRow.className = 'card-header';
 
@@ -193,12 +210,10 @@ function renderGrid(stations) {
         info.className = 'card-info';
 
         const title = document.createElement('h4');
-        // SECURITY: Use textContent to prevent XSS
         title.textContent = station.name;
 
         const meta = document.createElement('p');
         const tagText = (station.tags || '').split(',')[0] || 'Radio'; 
-        // SECURITY: Use textContent
         meta.textContent = `${tagText} • ${station.countrycode || 'WW'}`;
 
         info.appendChild(title);
@@ -219,21 +234,16 @@ function renderGrid(stations) {
         headerRow.appendChild(btn);
         card.appendChild(headerRow);
 
-        // Tech Details - [SECURED SECTION]
         if (state.showTech) {
             const techRow = document.createElement('div');
             techRow.className = 'tech-details';
 
-            // Helper to create safe elements
             const createItem = (label, value) => {
                 const div = document.createElement('div');
                 div.className = 'tech-item';
-                
                 const span = document.createElement('span');
                 span.textContent = label + ': ';
-                
                 div.appendChild(span);
-                // SECURITY: append() treats strings as text nodes (Safe)
                 div.append(value || 'N/A'); 
                 return div;
             };
@@ -244,17 +254,13 @@ function renderGrid(stations) {
 
             const streamDiv = document.createElement('div');
             streamDiv.className = 'tech-item full';
-            
             const streamLabel = document.createElement('span');
             streamLabel.textContent = 'Stream: ';
-            
-            // SECURITY: createTextNode ensures URL is rendered as text, not HTML
             const urlText = document.createTextNode(station.url_resolved || 'Unknown URL');
 
             streamDiv.appendChild(streamLabel);
             streamDiv.appendChild(urlText);
             techRow.appendChild(streamDiv);
-            
             card.appendChild(techRow);
         }
 
@@ -274,7 +280,6 @@ function playStation(station) {
     state.currentStation = station;
     els.player.classList.remove('hidden');
     
-    // SECURITY: textContent prevents XSS in player
     els.playerTitle.textContent = station.name;
     els.playerMeta.textContent = "Connecting...";
     els.playerMeta.style.color = "var(--text-dim)";
@@ -284,29 +289,20 @@ function playStation(station) {
 
     renderGrid(state.view === 'favorites' ? state.favorites : state.stations);
 
-    // FIX: Using url_resolved ensures we get audio, not playlist text files.
-    // This fixes "Format Not Supported".
     state.audio.src = station.url_resolved; 
-    
     state.audio.load();
+    
     const playPromise = state.audio.play();
-
     if (playPromise !== undefined) {
         playPromise.catch(error => {
             console.error("Playback failed:", error);
-            
-            // Improved error handling
-            if (state.audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
-                // This covers: 404, Offline, and Mixed Content Blocking
-                els.playerMeta.textContent = "Stream Offline / Network Error";
+            if (error.name === 'NotAllowedError') {
+                els.playerMeta.textContent = "Click Play to Start";
             } else if (error.name === 'NotSupportedError') {
                 els.playerMeta.textContent = "Format Not Supported";
-            } else if (error.name === 'NotAllowedError') {
-                els.playerMeta.textContent = "Click Play to Start";
             } else {
-                els.playerMeta.textContent = "Connection Error";
+                els.playerMeta.textContent = "Connecting...";
             }
-            els.playerMeta.style.color = "var(--danger)";
         });
     }
 
