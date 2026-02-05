@@ -2,11 +2,22 @@
 const API_BASE = 'https://de1.api.radio-browser.info/json/stations/search';
 const DEFAULT_IMG = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTUyMjIyIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMiIvPjxwYXRoIGQ9Ik0xNi4yNCA3Ljc2YTYgNiAwIDAgMSAwIDguNDlNMjEuMTkgMi44MWExMCAxMCAwIDAgMSAwIDE4LjM4Ii8+PC9zdmc+';
 
+// Helper: Safely load favorites
+function loadFavorites() {
+    try {
+        const stored = JSON.parse(localStorage.getItem('flux_favorites'));
+        return Array.isArray(stored) ? stored : [];
+    } catch (e) {
+        console.warn('Corrupted favorites data reset.');
+        return [];
+    }
+}
+
 // State
 let state = {
     audio: new Audio(),
     stations: [],
-    favorites: JSON.parse(localStorage.getItem('flux_favorites')) || [],
+    favorites: loadFavorites(),
     volume: parseFloat(localStorage.getItem('flux_volume')) || 1.0,
     currentStation: null,
     isPlaying: false,
@@ -167,7 +178,6 @@ function renderGrid(stations) {
 
         const img = document.createElement('img');
         img.className = 'card-img';
-        // USE HELPER HERE
         img.src = getStationImage(station.favicon);
         img.onerror = () => img.src = DEFAULT_IMG;
 
@@ -199,7 +209,7 @@ function renderGrid(stations) {
         headerRow.appendChild(btn);
         card.appendChild(headerRow);
 
-        // Tech Details - [PATCHED SECTION]
+        // Tech Details - [SECURED SECTION]
         if (state.showTech) {
             const techRow = document.createElement('div');
             techRow.className = 'tech-details';
@@ -213,7 +223,8 @@ function renderGrid(stations) {
                 span.textContent = label + ': ';
                 
                 div.appendChild(span);
-                div.append(value || 'N/A'); // Appends text, not HTML
+                // Safe text insertion
+                div.append(value || 'N/A'); 
                 return div;
             };
 
@@ -221,27 +232,22 @@ function renderGrid(stations) {
             techRow.appendChild(createItem('Codec', station.codec));
             techRow.appendChild(createItem('Clicks', station.clickcount));
 
-            // Stream Link (Handled separately for attributes)
+            // Stream Link rendered as Plain Text (Secure)
             const streamDiv = document.createElement('div');
             streamDiv.className = 'tech-item full';
             
             const streamLabel = document.createElement('span');
             streamLabel.textContent = 'Stream: ';
             
-            const link = document.createElement('a');
-            link.href = station.url_resolved;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.textContent = station.url_resolved;
-            link.onclick = (e) => e.stopPropagation();
+            // Just a text node, no <a> tag, no javascript execution possible
+            const urlText = document.createTextNode(station.url_resolved || 'Unknown URL');
 
             streamDiv.appendChild(streamLabel);
-            streamDiv.appendChild(link);
+            streamDiv.appendChild(urlText);
             techRow.appendChild(streamDiv);
             
             card.appendChild(techRow);
         }
-        // [END PATCH]
 
         fragment.appendChild(card);
     });
@@ -263,7 +269,6 @@ function playStation(station) {
     els.playerMeta.textContent = "Connecting...";
     els.playerMeta.style.color = "var(--text-dim)";
     
-    // USE HELPER HERE
     els.playerImg.src = getStationImage(station.favicon);
     els.playerImg.onerror = () => els.playerImg.src = DEFAULT_IMG;
 
