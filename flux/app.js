@@ -220,8 +220,15 @@ function renderGrid(stations) {
                 tech.appendChild(item);
             };
 
+            const clicks = station.clickcount ? station.clickcount.toLocaleString() : '0';
+            const votes = station.votes ? station.votes.toLocaleString() : '0';
+
             addTech('Bitrate', `${station.bitrate} kbps`);
             addTech('Codec', station.codec);
+            
+            addTech('Clicks', clicks);
+            addTech('Votes', votes);
+
             addTech('Stream', station.url_resolved, true);
             card.appendChild(tech);
         }
