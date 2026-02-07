@@ -1,40 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flux Radio</title>
-    
     <meta name="referrer" content="no-referrer">
-    
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
-        script-src 'self' https://unpkg.com;
+        script-src 'self';
         style-src 'self' 'unsafe-inline'; 
         connect-src 'self' https://de1.api.radio-browser.info;
-        img-src 'self' data: https:;
+        img-src 'self' data: https:; 
         media-src *;
     ">
-
+    <link rel="icon"
+        href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgc3Ryb2tlPSIjMGQ5NDg4IiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiPjxyZWN0IHg9IjIiIHk9IjciIHdpZHRoPSIyMCIgaGVpZ2h0PSIxMyIgcng9IjIiIHJ5PSIyIi8+PHBhdGggZD0iTTE2IDJ2NSIvPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTMiIHI9IjMiLz48cGF0aCBkPSJNNiAxM3YuMDEiLz48cGF0aCBkPSJNMTggMTN2LjAxIi8+PC9zdmc+">
     <link rel="stylesheet" href="style.css">
-    
-    <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 </head>
+
 <body>
 
     <header>
         <div class="top-bar">
             <div class="logo">
-                <i data-lucide="radio"></i>
                 <div class="logo-text">
                     <h1>Flux Radio</h1>
                     <span>LIVE STREAM</span>
                 </div>
             </div>
             <div class="controls">
-                <button id="view-toggle" title="Toggle Favorites"><i data-lucide="heart"></i></button>
-                <button id="tech-toggle" title="Toggle Tech Details"><i data-lucide="info"></i> Info</button>
-                </div>
+                <button id="https-toggle" title="Only show secure HTTPS stations">HTTPS</button>
+                <button id="anon-toggle" title="Try to hide IP from stations (May break some streams)">Anon</button>
+
+                <span class="divider" style="height: 15px; margin: 0 5px;"></span>
+
+                <button id="view-toggle" title="Toggle Favorites">Favs</button>
+                <button id="tech-toggle" title="Toggle Tech Details">Info</button>
+            </div>
         </div>
 
         <div class="search-bar">
@@ -70,15 +73,15 @@
         </div>
 
         <div class="player-controls">
-            <button id="play-pause-btn"><i data-lucide="play"></i></button>
+            <button id="play-pause-btn"></button>
         </div>
 
         <div class="player-volume">
-            <i data-lucide="volume-2" id="vol-icon"></i>
             <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="1">
         </div>
     </div>
 
     <script src="app.js"></script>
 </body>
+
 </html>
