@@ -301,7 +301,11 @@ function toggleFavorite(station) {
 // --- Events ---
 function setupEvents() {
     els.searchBtn.onclick = () => searchStations(els.input.value, 'name');
-    els.input.onkeydown = (e) => e.key === 'Enter' && searchStations(els.input.value, 'name');
+    els.input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+            searchStations(els.input.value, 'name');
+        }
+    };
     
     document.querySelectorAll('.tags button').forEach(btn => {
         btn.onclick = () => searchStations(btn.dataset.search, btn.dataset.type);
