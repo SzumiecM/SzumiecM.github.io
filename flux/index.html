@@ -13,6 +13,9 @@
         connect-src 'self' https://*.api.radio-browser.info;
         img-src 'self' data: https:; 
         media-src *;
+        object-src 'none';
+        base-uri 'none';
+        form-action 'none';
     ">
     <link rel="icon"
         href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgc3Ryb2tlPSIjMGQ5NDg4IiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiPjxyZWN0IHg9IjIiIHk9IjciIHdpZHRoPSIyMCIgaGVpZ2h0PSIxMyIgcng9IjIiIHJ5PSIyIi8+PHBhdGggZD0iTTE2IDJ2NSIvPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTMiIHI9IjMiLz48cGF0aCBkPSJNNiAxM3YuMDEiLz48cGF0aCBkPSJNMTggMTN2LjAxIi8+PC9zdmc+">
@@ -30,8 +33,9 @@
                 </div>
             </div>
             <div class="controls">
+                <button id="icons-toggle" title="Load station logos">Icons</button>
                 <button id="https-toggle" title="Only show secure HTTPS stations">HTTPS</button>
-                <button id="anon-toggle" title="Strip Cookies/Credentials (IP remains visible)">Anon</button>
+                <button id="anon-toggle" title="Strip Cookies/Credentials">Anon</button>
 
                 <span class="divider" style="height: 15px; margin: 0 5px;"></span>
 
@@ -77,7 +81,8 @@
         </div>
 
         <div class="player-volume">
-            <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="1">
+            <div id="vol-icon-wrapper"></div>
+            <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.15">
         </div>
     </div>
 

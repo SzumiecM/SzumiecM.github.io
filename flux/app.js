@@ -11,7 +11,8 @@ const ICONS = {
     radio: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="13" rx="2" ry="2"/><path d="M16 2v5"/><circle cx="12" cy="13" r="3"/><path d="M6 13v.01"/><path d="M18 13v.01"/></svg>`,
     external: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
     lock: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
-    shield: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
+    shield: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+    image: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`
 };
 
 // --- Configuration ---
@@ -19,16 +20,19 @@ const API_BASE = 'https://de1.api.radio-browser.info/json/stations/search';
 const DEFAULT_IMG = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTUyMjIyIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMiIvPjxwYXRoIGQ9Ik0xNi4yNCA3Ljc2YTYgNiAwIDAgMSAwIDguNDlNMjEuMTkgMi44MWExMCAxMCAwIDAgMSAwIDE4LjM4Ii8+PC9zdmc+';
 
 // --- State ---
+const savedVol = localStorage.getItem('flux_volume');
 const state = {
     audio: null,
     stations: [],
     favorites: loadFavorites(),
-    volume: parseFloat(localStorage.getItem('flux_volume')) || 1.0,
+    // Changed: Defaults to 0.15 (15%) if nothing saved
+    volume: savedVol !== null ? parseFloat(savedVol) : 0.15,
     currentStation: null,
     view: 'search',
     showTech: false,
     httpsOnly: localStorage.getItem('flux_https') === 'true', 
-    anonMode: localStorage.getItem('flux_anon') !== 'false', // Default TRUE
+    anonMode: localStorage.getItem('flux_anon') !== 'false', 
+    showIcons: localStorage.getItem('flux_icons') === 'true',
     lastSearch: { term: '', type: 'top' }
 };
 
@@ -39,12 +43,12 @@ const els = {
     player: document.getElementById('player-bar'),
     playBtn: document.getElementById('play-pause-btn'),
     volSlider: document.getElementById('volume-slider'),
-    volIconWrapper: document.querySelector('.player-volume'),
-    volIcon: document.getElementById('vol-icon'),
+    volIconWrapper: document.getElementById('vol-icon-wrapper'),
     viewToggle: document.getElementById('view-toggle'),
     techToggle: document.getElementById('tech-toggle'),
     httpsToggle: document.getElementById('https-toggle'),
     anonToggle: document.getElementById('anon-toggle'),
+    iconsToggle: document.getElementById('icons-toggle'),
     playerImg: document.getElementById('player-img'),
     playerTitle: document.getElementById('player-title'),
     playerMeta: document.getElementById('player-meta'),
@@ -60,7 +64,6 @@ function initAudio(isAnon) {
 
     state.audio = new Audio();
     
-    // Anon Mode: strips cookies and referrer at browser level
     if (isAnon) {
         state.audio.crossOrigin = "anonymous";
     }
@@ -96,7 +99,8 @@ function loadFavorites() {
 }
 
 function getStationImage(url) {
-    if (!url || !url.startsWith('http') && !url.startsWith('data:')) return DEFAULT_IMG;
+    if (!state.showIcons) return DEFAULT_IMG;
+    if (!url || (!url.startsWith('http') && !url.startsWith('data:'))) return DEFAULT_IMG;
     return url;
 }
 
@@ -105,15 +109,15 @@ function saveState() {
     localStorage.setItem('flux_volume', state.volume);
     localStorage.setItem('flux_https', state.httpsOnly);
     localStorage.setItem('flux_anon', state.anonMode);
+    localStorage.setItem('flux_icons', state.showIcons);
 }
 
-// SECURITY: Strictly validate URL protocols to prevent javascript: injection
 function sanitizeURL(url) {
     if (!url) return null;
     try {
         const parsed = new URL(url);
         if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-            return url;
+            return parsed.href;
         }
     } catch (e) {
         return null;
@@ -121,7 +125,6 @@ function sanitizeURL(url) {
     return null;
 }
 
-// SECURITY: Updated to use textContent for text and innerHTML only for trusted icons
 function createExternalLink(text, url) {
     const safeUrl = sanitizeURL(url);
     if (!safeUrl) return null;
@@ -129,16 +132,13 @@ function createExternalLink(text, url) {
     const a = document.createElement('a');
     a.href = safeUrl;
     a.target = "_blank";
-    a.rel = "noopener noreferrer"; // SECURITY: Prevent Reverse Tabnabbing
+    a.rel = "noopener noreferrer"; 
     a.style.cssText = "color:var(--accent); text-decoration:none; margin-left:5px; display:inline-flex; align-items:center;";
-    
-    // SAFE IMPLEMENTATION:
     a.textContent = text; 
     
-    // Append icon safely
     const iconSpan = document.createElement('span');
     iconSpan.style.marginLeft = "4px";
-    iconSpan.innerHTML = ICONS.external; // Safe because ICONS is trusted static SVG
+    iconSpan.innerHTML = ICONS.external;
     a.appendChild(iconSpan);
     
     return a;
@@ -146,7 +146,6 @@ function createExternalLink(text, url) {
 
 function showErrorState(msg, linkText, linkUrl) {
     els.playerMeta.innerHTML = '';
-    
     const span = document.createElement('span');
     span.style.color = "var(--danger)";
     span.textContent = msg;
@@ -161,7 +160,6 @@ function showErrorState(msg, linkText, linkUrl) {
 // --- Logic ---
 async function searchStations(term, type) {
     state.lastSearch = { term, type };
-
     if (type === 'top') els.input.value = '';
     
     els.grid.innerHTML = '<div class="status-msg">Scanning frequencies...</div>';
@@ -176,13 +174,8 @@ async function searchStations(term, type) {
         reverse: true
     };
 
-    if (type !== 'top') {
-        query[type] = term;
-    }
-
-    if (state.httpsOnly) {
-        query.https = 'true'; 
-    }
+    if (type !== 'top') query[type] = term;
+    if (state.httpsOnly) query.https = 'true'; 
 
     const params = new URLSearchParams(query);
 
@@ -231,7 +224,6 @@ function renderGrid(stations) {
         const info = document.createElement('div');
         info.className = 'card-info';
         
-        // SECURITY: Use textContent to prevent XSS
         const h4 = document.createElement('h4');
         h4.textContent = station.name;
         
@@ -242,7 +234,6 @@ function renderGrid(stations) {
 
         const btn = document.createElement('button');
         btn.className = `fav-btn ${isFav ? 'active' : ''}`;
-        // Icons are safe static SVG strings
         btn.innerHTML = isFav ? ICONS.heartFilled : ICONS.heart;
         btn.onclick = (e) => { e.stopPropagation(); toggleFavorite(station); };
 
@@ -259,7 +250,6 @@ function renderGrid(stations) {
                 
                 const span = document.createElement('span');
                 span.textContent = `${label}: `;
-                
                 const text = document.createTextNode(val || 'N/A');
                 
                 item.appendChild(span);
@@ -267,13 +257,8 @@ function renderGrid(stations) {
                 tech.appendChild(item);
             };
 
-            const clicks = station.clickcount ? station.clickcount.toLocaleString() : '0';
-            const votes = station.votes ? station.votes.toLocaleString() : '0';
-
             addTech('Bitrate', `${station.bitrate} kbps`);
             addTech('Codec', station.codec);
-            addTech('Clicks', clicks);
-            addTech('Votes', votes);
             addTech('Stream', station.url_resolved, true);
             
             card.appendChild(tech);
@@ -294,7 +279,6 @@ function playStation(station) {
     state.currentStation = station;
     els.player.classList.remove('hidden');
     
-    // SECURITY: Use textContent
     els.playerTitle.textContent = station.name;
     els.playerMeta.textContent = "Connecting...";
     els.playerMeta.className = ""; 
@@ -362,9 +346,7 @@ function toggleFavorite(station) {
 function setupEvents() {
     els.searchBtn.onclick = () => searchStations(els.input.value, 'name');
     els.input.onkeydown = (e) => {
-        if (e.key === 'Enter') {
-            searchStations(els.input.value, 'name');
-        }
+        if (e.key === 'Enter') searchStations(els.input.value, 'name');
     };
     
     document.querySelectorAll('.tags button').forEach(btn => {
@@ -394,11 +376,20 @@ function setupEvents() {
         state.httpsOnly = !state.httpsOnly;
         els.httpsToggle.classList.toggle('active', state.httpsOnly);
         saveState();
-        if (state.view === 'search') {
-             searchStations(state.lastSearch.term, state.lastSearch.type); 
-        }
+        if (state.view === 'search') searchStations(state.lastSearch.term, state.lastSearch.type); 
     };
     if(state.httpsOnly) els.httpsToggle.classList.add('active');
+
+    els.iconsToggle.onclick = () => {
+        state.showIcons = !state.showIcons;
+        els.iconsToggle.classList.toggle('active', state.showIcons);
+        saveState();
+        renderGrid(state.view === 'favorites' ? state.favorites : state.stations);
+        if(state.currentStation) {
+            els.playerImg.src = getStationImage(state.currentStation.favicon);
+        }
+    };
+    if(state.showIcons) els.iconsToggle.classList.add('active');
 
     els.anonToggle.onclick = () => {
         state.anonMode = !state.anonMode;
@@ -423,7 +414,6 @@ function setupEvents() {
 
 function updatePlayerUI(isPlaying) {
     els.playBtn.innerHTML = isPlaying ? ICONS.pause : ICONS.play;
-    // Check if showing error (has spans/links) before overwriting
     if (!els.playerMeta.querySelector('a') && !els.playerMeta.textContent.includes('Failed')) {
          els.playerMeta.textContent = isPlaying ? "Live" : "Paused";
          els.playerMeta.style.color = isPlaying ? "var(--accent)" : "var(--text-dim)";
@@ -437,11 +427,10 @@ function updateVolumeIcon() {
     else if (v < 0.5) icon = ICONS.volLow;
     
     if(els.volIconWrapper) {
-        const existing = els.volIconWrapper.querySelector('svg');
-        if(existing) existing.remove();
+        els.volIconWrapper.innerHTML = ''; 
         const temp = document.createElement('div');
         temp.innerHTML = icon;
-        els.volIconWrapper.insertBefore(temp.firstChild, els.volSlider);
+        els.volIconWrapper.appendChild(temp.firstChild);
     }
 }
 
@@ -453,6 +442,7 @@ function injectStaticIcons() {
     if(els.techToggle) els.techToggle.innerHTML = ICONS.info + " Info";
     if(els.httpsToggle) els.httpsToggle.innerHTML = ICONS.lock + " HTTPS";
     if(els.anonToggle) els.anonToggle.innerHTML = ICONS.shield + " Anon";
+    if(els.iconsToggle) els.iconsToggle.innerHTML = ICONS.image + " Icons";
 }
 
 // --- Boot ---

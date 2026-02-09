@@ -19,14 +19,13 @@
 body {
     background-color: var(--bg);
     color: var(--text);
-    height: 100vh; /* Fallback */
-    height: 100dvh; /* Mobile viewport fix */
+    height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
 
-/* SVG Icon Base Styles */
 svg {
     width: 20px;
     height: 20px;
@@ -37,7 +36,6 @@ svg {
     fill: none;
 }
 
-/* Header */
 header {
     background: rgba(23, 23, 23, 0.9);
     backdrop-filter: blur(10px);
@@ -77,6 +75,7 @@ header {
 .controls {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .controls button {
@@ -176,7 +175,6 @@ input:focus {
     flex-shrink: 0;
 }
 
-/* Grid */
 main {
     flex: 1;
     overflow-y: auto;
@@ -264,7 +262,6 @@ main {
     stroke: var(--danger);
 }
 
-/* Tech Details */
 .tech-details {
     margin-top: 0.75rem;
     padding-top: 0.75rem;
@@ -301,7 +298,6 @@ main {
     text-overflow: ellipsis;
 }
 
-/* Player Bar */
 #player-bar {
     position: fixed;
     bottom: 0;
@@ -410,7 +406,7 @@ main {
 .player-volume {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 1rem;
     width: 30%;
     justify-content: flex-end;
 }
@@ -418,38 +414,58 @@ main {
 .player-volume svg {
     width: 20px;
     color: var(--text-dim);
+    flex-shrink: 0;
 }
 
+/* --- Styled Range Slider --- */
 input[type=range] {
     width: 100px;
-    height: 4px;
-    border-radius: 2px;
+    height: 6px;
     appearance: none;
     -webkit-appearance: none;
-    background: var(--border);
+    background: #333;
+    /* Darker track */
+    border-radius: 99px;
     cursor: pointer;
+    outline: none;
+    transition: background 0.2s;
 }
 
-/* Chrome/Safari */
+input[type=range]:hover {
+    background: #404040;
+}
+
+/* Chrome/Safari Thumb */
 input[type=range]::-webkit-slider-thumb {
     appearance: none;
     -webkit-appearance: none;
-    width: 12px;
-    height: 12px;
-    background: white;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
     border-radius: 50%;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    border: 2px solid #fff;
+    box-shadow: 0 0 10px rgba(13, 148, 136, 0.4);
+    transition: transform 0.1s;
 }
 
-/* Firefox */
+input[type=range]::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+}
+
+/* Firefox Thumb */
 input[type=range]::-moz-range-thumb {
-    width: 12px;
-    height: 12px;
-    background: white;
-    border: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border: 2px solid #fff;
     border-radius: 50%;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 10px rgba(13, 148, 136, 0.4);
     cursor: pointer;
+    transition: transform 0.1s;
+}
+
+input[type=range]::-moz-range-thumb:hover {
+    transform: scale(1.1);
 }
 
 .status-msg {
