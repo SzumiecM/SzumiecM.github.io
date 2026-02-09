@@ -259,6 +259,12 @@ function renderGrid(stations) {
 
             addTech('Bitrate', `${station.bitrate} kbps`);
             addTech('Codec', station.codec);
+
+            const clicks = station.clickcount ? station.clickcount.toLocaleString() : '0';
+            const votes = station.votes ? station.votes.toLocaleString() : '0';
+            addTech('Clicks', clicks);
+            addTech('Votes', votes);
+
             addTech('Stream', station.url_resolved, true);
             
             card.appendChild(tech);
