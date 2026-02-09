@@ -3,14 +3,14 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Flux Radio</title>
     <meta name="referrer" content="no-referrer">
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
         script-src 'self';
         style-src 'self' 'unsafe-inline'; 
-        connect-src 'self' https://de1.api.radio-browser.info;
+        connect-src 'self' https://*.api.radio-browser.info;
         img-src 'self' data: https:; 
         media-src *;
     ">
@@ -31,7 +31,7 @@
             </div>
             <div class="controls">
                 <button id="https-toggle" title="Only show secure HTTPS stations">HTTPS</button>
-                <button id="anon-toggle" title="Try to hide IP from stations (May break some streams)">Anon</button>
+                <button id="anon-toggle" title="Strip Cookies/Credentials (IP remains visible)">Anon</button>
 
                 <span class="divider" style="height: 15px; margin: 0 5px;"></span>
 

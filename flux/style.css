@@ -19,7 +19,8 @@
 body {
     background-color: var(--bg);
     color: var(--text);
-    height: 100vh;
+    height: 100vh; /* Fallback */
+    height: 100dvh; /* Mobile viewport fix */
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -429,6 +430,7 @@ input[type=range] {
     cursor: pointer;
 }
 
+/* Chrome/Safari */
 input[type=range]::-webkit-slider-thumb {
     appearance: none;
     -webkit-appearance: none;
@@ -439,8 +441,20 @@ input[type=range]::-webkit-slider-thumb {
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
+/* Firefox */
+input[type=range]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: white;
+    border: none;
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+}
+
 .status-msg {
     grid-column: 1 / -1;
+    width: 100%;
     text-align: center;
     color: var(--text-dim);
     margin-top: 2rem;

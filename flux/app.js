@@ -50,63 +50,42 @@ const els = {
     playerMeta: document.getElementById('player-meta'),
 };
 
-// --- Audio Sandbox ---
-const AudioSandbox = {
-    iframe: null,
-    audio: null,
-    
-    destroy() {
-        if (this.audio) {
-            this.audio.pause();
-            this.audio.src = "";
-            this.audio.load();
-            this.audio = null;
-        }
-        if (this.iframe) {
-            this.iframe.remove();
-            this.iframe = null;
-        }
-    },
-
-    init(isAnon) {
-        this.destroy();
-
-        this.iframe = document.createElement('iframe');
-        this.iframe.style.display = 'none';
-        this.iframe.sandbox = 'allow-same-origin allow-scripts'; 
-        document.body.appendChild(this.iframe);
-
-        this.audio = this.iframe.contentDocument.createElement('audio');
-        if (isAnon) {
-            this.audio.crossOrigin = "anonymous";
-        }
-        
-        this.iframe.contentDocument.body.appendChild(this.audio);
-        this.attachEvents();
-        
-        return this.audio;
-    },
-
-    attachEvents() {
-        const audio = this.audio;
-        if (!audio) return;
-
-        audio.onloadstart = () => {
-            els.playBtn.classList.add('loading');
-            els.playerMeta.textContent = "Buffering...";
-            els.playerMeta.style.color = "var(--text-dim)";
-        };
-        audio.onplaying = () => {
-            els.playBtn.classList.remove('loading');
-            updatePlayerUI(true);
-        };
-        audio.onpause = () => updatePlayerUI(false);
-        audio.onerror = (e) => {
-            els.playBtn.classList.remove('loading');
-            els.playerMeta.innerHTML = `<span style="color:var(--danger)">Offline / Blocked</span> <a href="${state.currentStation?.url_resolved}" target="_blank" style="color:var(--accent);text-decoration:none;">${ICONS.external}</a>`;
-        };
+// --- Audio Manager ---
+function initAudio(isAnon) {
+    if (state.audio) {
+        state.audio.pause();
+        state.audio.removeAttribute('src');
+        state.audio = null;
     }
-};
+
+    state.audio = new Audio();
+    
+    // Anon Mode: strips cookies and referrer at browser level
+    if (isAnon) {
+        state.audio.crossOrigin = "anonymous";
+    }
+
+    state.audio.onloadstart = () => {
+        els.playBtn.classList.add('loading');
+        els.playerMeta.textContent = "Buffering...";
+        els.playerMeta.style.color = "var(--text-dim)";
+    };
+    
+    state.audio.onplaying = () => {
+        els.playBtn.classList.remove('loading');
+        updatePlayerUI(true);
+    };
+    
+    state.audio.onpause = () => updatePlayerUI(false);
+    
+    state.audio.onerror = (e) => {
+        els.playBtn.classList.remove('loading');
+        showErrorState("Offline / Blocked", "Try External", state.currentStation?.url_resolved);
+    };
+
+    state.audio.volume = state.volume;
+    return state.audio;
+}
 
 // --- Helpers ---
 function loadFavorites() {
@@ -117,7 +96,8 @@ function loadFavorites() {
 }
 
 function getStationImage(url) {
-    return (url && url !== "null" && url.trim() !== "") ? url : DEFAULT_IMG;
+    if (!url || !url.startsWith('http') && !url.startsWith('data:')) return DEFAULT_IMG;
+    return url;
 }
 
 function saveState() {
@@ -125,6 +105,57 @@ function saveState() {
     localStorage.setItem('flux_volume', state.volume);
     localStorage.setItem('flux_https', state.httpsOnly);
     localStorage.setItem('flux_anon', state.anonMode);
+}
+
+// SECURITY: Strictly validate URL protocols to prevent javascript: injection
+function sanitizeURL(url) {
+    if (!url) return null;
+    try {
+        const parsed = new URL(url);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+            return url;
+        }
+    } catch (e) {
+        return null;
+    }
+    return null;
+}
+
+// SECURITY: Updated to use textContent for text and innerHTML only for trusted icons
+function createExternalLink(text, url) {
+    const safeUrl = sanitizeURL(url);
+    if (!safeUrl) return null;
+
+    const a = document.createElement('a');
+    a.href = safeUrl;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer"; // SECURITY: Prevent Reverse Tabnabbing
+    a.style.cssText = "color:var(--accent); text-decoration:none; margin-left:5px; display:inline-flex; align-items:center;";
+    
+    // SAFE IMPLEMENTATION:
+    a.textContent = text; 
+    
+    // Append icon safely
+    const iconSpan = document.createElement('span');
+    iconSpan.style.marginLeft = "4px";
+    iconSpan.innerHTML = ICONS.external; // Safe because ICONS is trusted static SVG
+    a.appendChild(iconSpan);
+    
+    return a;
+}
+
+function showErrorState(msg, linkText, linkUrl) {
+    els.playerMeta.innerHTML = '';
+    
+    const span = document.createElement('span');
+    span.style.color = "var(--danger)";
+    span.textContent = msg;
+    els.playerMeta.appendChild(span);
+
+    if (linkText && linkUrl) {
+        const link = createExternalLink(linkText, linkUrl);
+        if (link) els.playerMeta.appendChild(link);
+    }
 }
 
 // --- Logic ---
@@ -199,10 +230,19 @@ function renderGrid(stations) {
 
         const info = document.createElement('div');
         info.className = 'card-info';
-        info.innerHTML = `<h4>${station.name}</h4><p>${(station.tags || '').split(',')[0] || 'Radio'} • ${station.countrycode || 'WW'}</p>`;
+        
+        // SECURITY: Use textContent to prevent XSS
+        const h4 = document.createElement('h4');
+        h4.textContent = station.name;
+        
+        const p = document.createElement('p');
+        p.textContent = `${(station.tags || '').split(',')[0] || 'Radio'} • ${station.countrycode || 'WW'}`;
+        
+        info.append(h4, p);
 
         const btn = document.createElement('button');
         btn.className = `fav-btn ${isFav ? 'active' : ''}`;
+        // Icons are safe static SVG strings
         btn.innerHTML = isFav ? ICONS.heartFilled : ICONS.heart;
         btn.onclick = (e) => { e.stopPropagation(); toggleFavorite(station); };
 
@@ -216,7 +256,14 @@ function renderGrid(stations) {
             const addTech = (label, val, full = false) => {
                 const item = document.createElement('div');
                 item.className = `tech-item ${full ? 'full' : ''}`;
-                item.innerHTML = `<span>${label}: </span>${val || 'N/A'}`;
+                
+                const span = document.createElement('span');
+                span.textContent = `${label}: `;
+                
+                const text = document.createTextNode(val || 'N/A');
+                
+                item.appendChild(span);
+                item.appendChild(text);
                 tech.appendChild(item);
             };
 
@@ -225,11 +272,10 @@ function renderGrid(stations) {
 
             addTech('Bitrate', `${station.bitrate} kbps`);
             addTech('Codec', station.codec);
-            
             addTech('Clicks', clicks);
             addTech('Votes', votes);
-
             addTech('Stream', station.url_resolved, true);
+            
             card.appendChild(tech);
         }
 
@@ -248,6 +294,7 @@ function playStation(station) {
     state.currentStation = station;
     els.player.classList.remove('hidden');
     
+    // SECURITY: Use textContent
     els.playerTitle.textContent = station.name;
     els.playerMeta.textContent = "Connecting...";
     els.playerMeta.className = ""; 
@@ -256,30 +303,36 @@ function playStation(station) {
 
     renderGrid(state.view === 'favorites' ? state.favorites : state.stations);
 
-    const streamUrl = station.url_resolved;
+    const streamUrl = sanitizeURL(station.url_resolved);
 
-    if (window.location.protocol === 'https:' && streamUrl.startsWith('http:')) {
-        els.playerMeta.innerHTML = `<span style="color:var(--danger)">Mixed Content.</span> <a href="${streamUrl}" target="_blank" style="color:var(--accent);text-decoration:none;">Open External ${ICONS.external}</a>`;
+    if (!streamUrl) {
+         showErrorState("Invalid Stream URL", null, null);
+         return;
     }
 
-    if (streamUrl.includes('.m3u') || streamUrl.includes('.pls')) {
-        els.playerMeta.innerHTML = `<span style="color:var(--text-dim)">Format Unsupported.</span> <a href="${streamUrl}" target="_blank" style="color:var(--accent);text-decoration:none;">Download Playlist ${ICONS.external}</a>`;
+    const isMixedContent = window.location.protocol === 'https:' && streamUrl.startsWith('http:');
+
+    if (isMixedContent) {
+        showErrorState("Mixed Content Blocked.", "Open External", streamUrl);
+        updatePlayerUI(false);
         return;
     }
 
-    state.audio.pause();
-    state.audio.src = "";
-    state.audio.load();
+    if (streamUrl.includes('.m3u') || streamUrl.includes('.pls')) {
+        showErrorState("Format Unsupported.", "Download Playlist", streamUrl);
+        return;
+    }
 
     state.audio.src = streamUrl;
     const p = state.audio.play();
+    
     if(p) {
         p.catch(error => {
             console.error("Playback failed:", error);
             if (error.name === 'NotAllowedError') {
                 els.playerMeta.textContent = "Autoplay Blocked. Click Play.";
             } else {
-                 els.playerMeta.innerHTML = `<span style="color:var(--danger)">Connection Failed.</span> <a href="${streamUrl}" target="_blank" style="color:var(--accent);text-decoration:none;">Try Direct Link ${ICONS.external}</a>`;
+                 showErrorState("Connection Failed.", "Try Direct Link", streamUrl);
             }
         });
     }
@@ -355,29 +408,23 @@ function setupEvents() {
         const currentSrc = state.currentStation ? state.currentStation.url_resolved : null;
         const wasPlaying = !state.audio.paused; 
 
-        AudioSandbox.destroy();
-        
-        setTimeout(() => {
-            state.audio = AudioSandbox.init(state.anonMode);
-            state.audio.volume = state.volume;
+        initAudio(state.anonMode);
 
-            if (currentSrc) {
-                state.audio.src = currentSrc;
-                state.audio.load();
-                
-                if(wasPlaying) {
-                    const p = state.audio.play();
-                    if(p) p.catch(e => console.log("Resume failed:", e));
-                }
+        if (currentSrc) {
+            state.audio.src = currentSrc;
+            if(wasPlaying) {
+                const p = state.audio.play();
+                if(p) p.catch(e => console.log("Resume failed:", e));
             }
-        }, 100);
+        }
     };
     if(state.anonMode) els.anonToggle.classList.add('active');
 }
 
 function updatePlayerUI(isPlaying) {
     els.playBtn.innerHTML = isPlaying ? ICONS.pause : ICONS.play;
-    if (!els.playerMeta.innerHTML.includes('Error') && !els.playerMeta.innerHTML.includes('Failed') && !els.playerMeta.innerHTML.includes('Offline')) {
+    // Check if showing error (has spans/links) before overwriting
+    if (!els.playerMeta.querySelector('a') && !els.playerMeta.textContent.includes('Failed')) {
          els.playerMeta.textContent = isPlaying ? "Live" : "Paused";
          els.playerMeta.style.color = isPlaying ? "var(--accent)" : "var(--text-dim)";
     }
@@ -386,7 +433,7 @@ function updatePlayerUI(isPlaying) {
 function updateVolumeIcon() {
     const v = state.volume;
     let icon = ICONS.volHigh;
-    if (v == 0) icon = ICONS.volMute;
+    if (v < 0.01) icon = ICONS.volMute;
     else if (v < 0.5) icon = ICONS.volLow;
     
     if(els.volIconWrapper) {
@@ -410,9 +457,7 @@ function injectStaticIcons() {
 
 // --- Boot ---
 (function boot() {
-    state.audio = AudioSandbox.init(state.anonMode);
-    state.audio.volume = state.volume;
-    
+    initAudio(state.anonMode);
     injectStaticIcons();
     
     els.volSlider.value = state.volume;
