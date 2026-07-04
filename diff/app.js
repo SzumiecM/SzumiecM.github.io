@@ -13,7 +13,6 @@
     const addedBar = document.getElementById('bar-added');
     const removedBar = document.getElementById('bar-removed');
 
-    // --- 1. STATE RECOVERY ---
     window.addEventListener('DOMContentLoaded', () => {
         const savedLeft = localStorage.getItem('comparator_left');
         const savedRight = localStorage.getItem('comparator_right');
@@ -24,13 +23,11 @@
     leftInput.addEventListener('input', () => localStorage.setItem('comparator_left', leftInput.value));
     rightInput.addEventListener('input', () => localStorage.setItem('comparator_right', rightInput.value));
 
-    // --- 2. THE DIFF MATRIX ENGINE ---
     btn.addEventListener('click', () => {
         const valLeft = leftInput.value;
         const valRight = rightInput.value;
 
         if (!isDiffMode) {
-            // Save viewport location tracking states
             const currentScrollTop = leftInput.scrollTop;
             const currentScrollLeft = leftInput.scrollLeft;
 
@@ -41,14 +38,11 @@
             const htmlB = [];
             let addedCount = 0;
             let removedCount = 0;
-
             let operations = [];
 
-            // Short-circuit Optimization for Identical Text
             if (valLeft === valRight) {
                 linesA.forEach(line => operations.push({ type: 'unchanged', text: line }));
             } else {
-                // Compute Standard LCS
                 const matrix = Array(linesA.length + 1).fill(null).map(() => Array(linesB.length + 1).fill(0));
 
                 for (let x = 1; x <= linesA.length; x++) {
@@ -93,7 +87,6 @@
                 }
             });
 
-            // Layout Render updates
             const totalDiffs = addedCount + removedCount;
             const addedPct = totalDiffs > 0 ? (addedCount / totalDiffs) * 100 : 0;
             const removedPct = totalDiffs > 0 ? (removedCount / totalDiffs) * 100 : 0;
@@ -109,7 +102,6 @@
 
             toggleVisibility(true);
 
-            // Re-apply positioning constraints to target view
             leftOutput.scrollTop = currentScrollTop;
             leftOutput.scrollLeft = currentScrollLeft;
             rightOutput.scrollTop = currentScrollTop;
@@ -142,7 +134,6 @@
         rightOutput.style.display = showDiff ? 'block' : 'none';
         statsContainer.style.display = showDiff ? 'flex' : 'none';
 
-        // --- ADDED STATE TOGGLES HERE ---
         if (showDiff) {
             container.classList.add('diff-mode-active');
             btn.classList.add('editing-state');
@@ -161,7 +152,6 @@
             .replace(/'/g, '&#039;');
     }
 
-    // --- 3. SCROLL LINKING ENGINE ---
     function syncScroll(el1, el2) {
         let isScrolling = false;
         el1.addEventListener('scroll', () => {
@@ -169,9 +159,10 @@
                 isScrolling = true;
                 el2.scrollTop = el1.scrollTop;
                 el2.scrollLeft = el1.scrollLeft;
-                setTimeout(() => { isScrolling = false; }, 0);
+                // Throttles the unlock to match the monitor refresh rate
+                requestAnimationFrame(() => { isScrolling = false; });
             }
-        });
+        }, { passive: true }); // Prevents scrolling block delays
     }
 
     syncScroll(leftInput, rightInput);

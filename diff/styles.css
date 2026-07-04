@@ -165,18 +165,20 @@ textarea,
     padding: 12px;
     box-sizing: border-box;
     outline: none;
-}
-
-textarea {
     white-space: pre-wrap;
     word-break: break-all;
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: none;
     -ms-overflow-style: none;
+
+    will-change: scroll-position;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
-textarea::-webkit-scrollbar {
+textarea::-webkit-scrollbar,
+.diff-output::-webkit-scrollbar {
     display: none;
     width: 0;
     height: 0;
@@ -185,11 +187,6 @@ textarea::-webkit-scrollbar {
 .diff-output {
     display: none;
     background-color: var(--panel-bg);
-    min-width: 100%;
-    width: max-content;
-    white-space: pre;
-    overflow-y: auto;
-    overflow-x: hidden;
     user-select: text;
     -webkit-user-select: text;
 }
