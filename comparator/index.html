@@ -11,23 +11,23 @@
 <body>
 
     <header>
-        <div class="header-left">
-            <h1>Code Comparator</h1>
-            <div id="diff-stats" class="diff-stats" style="display: none;">
-                <span class="stat-count count-added" id="stat-added-txt">+0</span>
-                <span class="stat-count count-removed" id="stat-removed-txt">-0</span>
-                <div class="stat-bar">
-                    <div id="bar-added" class="bar-fill fill-added"></div>
-                    <div id="bar-removed" class="bar-fill fill-removed"></div>
-                </div>
+        <h1>Code Comparator</h1>
+        
+        <div id="diff-stats" class="diff-stats" style="display: none;">
+            <span class="stat-count count-added" id="stat-added-txt">+0</span>
+            <div class="stat-bar">
+                <div id="bar-added" class="bar-fill fill-added"></div>
+                <div id="bar-removed" class="bar-fill fill-removed"></div>
             </div>
+            <span class="stat-count count-removed" id="stat-removed-txt">-0</span>
         </div>
+
         <button id="compare-btn">Compare Diffs</button>
     </header>
 
     <main class="container">
         <div class="panel">
-            <div class="panel-header">Original (File A)</div>
+            <div class="panel-header">Left</div>
             <div class="editor-wrapper">
                 <textarea id="input-left" placeholder="Paste your original code or raw text here..."></textarea>
                 <div id="output-left" class="diff-output"></div>
@@ -35,7 +35,7 @@
         </div>
 
         <div class="panel">
-            <div class="panel-header">Modified (File B)</div>
+            <div class="panel-header">Right</div>
             <div class="editor-wrapper">
                 <textarea id="input-right" placeholder="Paste your modified code or raw text here..."></textarea>
                 <div id="output-right" class="diff-output"></div>
