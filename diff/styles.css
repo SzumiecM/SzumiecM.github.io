@@ -153,8 +153,10 @@ textarea,
     padding: 12px;
     box-sizing: border-box;
     outline: none;
-    white-space: pre;
-    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .diff-output {
