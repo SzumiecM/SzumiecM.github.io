@@ -109,6 +109,7 @@ button:hover {
     gap: 20px;
     flex: 1;
     min-height: 0;
+    contain: layout;
 }
 
 .panel {
@@ -162,12 +163,19 @@ textarea,
 .diff-output {
     display: none;
     background-color: var(--panel-bg);
+    min-width: 100%;
+    width: max-content;
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 .diff-line {
     display: block;
     min-height: 1.6em;
     padding-left: 4px;
+    width: 100%;
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 .diff-line.added {
@@ -181,4 +189,5 @@ textarea,
 .diff-line.empty {
     background-color: var(--empty-line-bg);
     user-select: none;
+    -webkit-user-select: none;
 }
