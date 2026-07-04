@@ -5,7 +5,7 @@
     --border-color: #30363d;
     --btn-bg: #21262d;
     --btn-hover: #30363d;
-    
+
     /* Git colors */
     --added-bg: rgba(46, 160, 67, 0.25);
     --removed-bg: rgba(248, 81, 73, 0.25);
@@ -38,14 +38,13 @@ h1 {
     margin: 0;
 }
 
-/* Centered Layout System */
 .diff-stats {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
     align-items: center;
-    gap: 0; /* Clear gaps to explicitly handle border-lines manually */
+    gap: 0;
     font-family: ui-monospace, SFMono-Regular, SF Mono, monospace;
     font-size: 0.9rem;
     font-weight: 600;
@@ -56,17 +55,16 @@ h1 {
     padding: 0 12px;
 }
 
-.count-added { 
+.count-added {
     color: #3fb950;
-    border-right: 1px solid var(--border-color); /* Line between positive count and bar */
+    border-right: 1px solid var(--border-color);
 }
 
-.count-removed { 
+.count-removed {
     color: #f85149;
-    border-left: 1px solid var(--border-color); /* Line between negative count and bar */
+    border-left: 1px solid var(--border-color);
 }
 
-/* Symmetrical Centered Ratio Bar */
 .stat-bar {
     display: flex;
     width: 140px;
@@ -74,7 +72,7 @@ h1 {
     border-radius: 4px;
     overflow: hidden;
     background-color: var(--border-color);
-    margin: 0 12px; /* Keeps consistent margins around line dividers */
+    margin: 0 12px;
 }
 
 .bar-fill {
@@ -82,8 +80,13 @@ h1 {
     transition: width 0.3s ease;
 }
 
-.fill-added { background-color: #3fb950; }
-.fill-removed { background-color: #f85149; }
+.fill-added {
+    background-color: #3fb950;
+}
+
+.fill-removed {
+    background-color: #f85149;
+}
 
 button {
     background-color: var(--btn-bg);
@@ -132,7 +135,8 @@ button:hover {
     overflow: hidden;
 }
 
-textarea, .diff-output {
+textarea,
+.diff-output {
     position: absolute;
     top: 0;
     left: 0;
@@ -150,8 +154,7 @@ textarea, .diff-output {
     box-sizing: border-box;
     outline: none;
     white-space: pre;
-    /* Allow scrolling on both states */
-    overflow: auto; 
+    overflow: auto;
 }
 
 .diff-output {
@@ -159,7 +162,6 @@ textarea, .diff-output {
     background-color: var(--panel-bg);
 }
 
-/* Line rendering blocks */
 .diff-line {
     display: block;
     min-height: 1.6em;
