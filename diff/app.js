@@ -134,11 +134,22 @@
     });
 
     function toggleVisibility(showDiff) {
+        const container = document.querySelector('.container');
+
         leftInput.style.display = showDiff ? 'none' : 'block';
         rightInput.style.display = showDiff ? 'none' : 'block';
         leftOutput.style.display = showDiff ? 'block' : 'none';
         rightOutput.style.display = showDiff ? 'block' : 'none';
         statsContainer.style.display = showDiff ? 'flex' : 'none';
+
+        // --- ADDED STATE TOGGLES HERE ---
+        if (showDiff) {
+            container.classList.add('diff-mode-active');
+            btn.classList.add('editing-state');
+        } else {
+            container.classList.remove('diff-mode-active');
+            btn.classList.remove('editing-state');
+        }
     }
 
     function escapeHtml(text) {
