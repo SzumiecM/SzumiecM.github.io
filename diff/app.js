@@ -127,7 +127,7 @@ btn.addEventListener('click', () => {
         rightOutput.style.display = 'none';
         statsContainer.style.display = 'none';
 
-        btn.innerText = "Compare Diffs";
+        btn.innerText = "Check Diff";
         isDiffMode = false;
     }
 });
