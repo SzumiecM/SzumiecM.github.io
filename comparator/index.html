@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raw Code Comparator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <header>
+        <div class="header-left">
+            <h1>Code Comparator</h1>
+            <div id="diff-stats" class="diff-stats" style="display: none;">
+                <span class="stat-count count-added" id="stat-added-txt">+0</span>
+                <span class="stat-count count-removed" id="stat-removed-txt">-0</span>
+                <div class="stat-bar">
+                    <div id="bar-added" class="bar-fill fill-added"></div>
+                    <div id="bar-removed" class="bar-fill fill-removed"></div>
+                </div>
+            </div>
+        </div>
+        <button id="compare-btn">Compare Diffs</button>
+    </header>
+
+    <main class="container">
+        <div class="panel">
+            <div class="panel-header">Original (File A)</div>
+            <div class="editor-wrapper">
+                <textarea id="input-left" placeholder="Paste your original code or raw text here..."></textarea>
+                <div id="output-left" class="diff-output"></div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">Modified (File B)</div>
+            <div class="editor-wrapper">
+                <textarea id="input-right" placeholder="Paste your modified code or raw text here..."></textarea>
+                <div id="output-right" class="diff-output"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
