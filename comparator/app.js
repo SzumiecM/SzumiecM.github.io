@@ -1,19 +1,37 @@
 let isDiffMode = false;
 
-document.getElementById('compare-btn').addEventListener('click', () => {
-    const btn = document.getElementById('compare-btn');
-    const leftInput = document.getElementById('input-left');
-    const rightInput = document.getElementById('input-right');
-    const leftOutput = document.getElementById('output-left');
-    const rightOutput = document.getElementById('output-right');
-    
-    // Stats Elements
-    const statsContainer = document.getElementById('diff-stats');
-    const addedTxt = document.getElementById('stat-added-txt');
-    const removedTxt = document.getElementById('stat-removed-txt');
-    const addedBar = document.getElementById('bar-added');
-    const removedBar = document.getElementById('bar-removed');
+const leftInput = document.getElementById('input-left');
+const rightInput = document.getElementById('input-right');
+const leftOutput = document.getElementById('output-left');
+const rightOutput = document.getElementById('output-right');
+const btn = document.getElementById('compare-btn');
 
+// Stats Elements
+const statsContainer = document.getElementById('diff-stats');
+const addedTxt = document.getElementById('stat-added-txt');
+const removedTxt = document.getElementById('stat-removed-txt');
+const addedBar = document.getElementById('bar-added');
+const removedBar = document.getElementById('bar-removed');
+
+// --- 1. LOCAL STORAGE: LOAD STATE ---
+window.addEventListener('DOMContentLoaded', () => {
+    const savedLeft = localStorage.getItem('comparator_left');
+    const savedRight = localStorage.getItem('comparator_right');
+    
+    if (savedLeft) leftInput.value = savedLeft;
+    if (savedRight) rightInput.value = savedRight;
+});
+
+// --- 2. LOCAL STORAGE: SAVE STATE ON TYPE ---
+leftInput.addEventListener('input', () => {
+    localStorage.setItem('comparator_left', leftInput.value);
+});
+rightInput.addEventListener('input', () => {
+    localStorage.setItem('comparator_right', rightInput.value);
+});
+
+// --- 3. DIFF CORE ENGINE ---
+btn.addEventListener('click', () => {
     if (!isDiffMode) {
         const linesA = leftInput.value.split('\n');
         const linesB = rightInput.value.split('\n');
@@ -80,12 +98,10 @@ document.getElementById('compare-btn').addEventListener('click', () => {
             removedPct = (removedCount / totalDiffs) * 100;
         }
 
-        // Apply text updates and visual distributions
         addedTxt.innerText = `+${addedCount}`;
         removedTxt.innerText = `-${removedCount}`;
         
         if (totalDiffs === 0) {
-            // Equal distribution fallback if strings match completely
             addedBar.style.width = '0%';
             removedBar.style.width = '0%';
         } else {
@@ -125,28 +141,20 @@ function escapeHtml(text) {
         .replace(/'/g, '&#039;');
 }
 
-// --- UNIFIED SCROLL SYNC ENGINE ---
-const leftTextarea = document.getElementById('input-left');
-const rightTextarea = document.getElementById('input-right');
-const leftOutput = document.getElementById('output-left');
-const rightOutput = document.getElementById('output-right');
-
+// --- 4. UNIFIED SCROLL SYNC ENGINE ---
 function syncScroll(el1, el2) {
     let isScrolling = false;
-    
     el1.addEventListener('scroll', () => {
         if (!isScrolling) {
             isScrolling = true;
             el2.scrollTop = el1.scrollTop;
             el2.scrollLeft = el1.scrollLeft;
-            // Clear flag on next macro-task tick to prevent infinite feedback loops
             setTimeout(() => { isScrolling = false; }, 0);
         }
     });
 }
 
-// Bind both editing mode and diff output mode
-syncScroll(leftTextarea, rightTextarea);
-syncScroll(rightTextarea, leftTextarea);
+syncScroll(leftInput, rightInput);
+syncScroll(rightInput, leftInput);
 syncScroll(leftOutput, rightOutput);
 syncScroll(rightOutput, leftOutput);
