@@ -8,8 +8,9 @@
     --added-bg: rgba(46, 160, 67, 0.25);
     --removed-bg: rgba(248, 81, 73, 0.25);
     --empty-line-bg: rgba(255, 255, 255, 0.03);
-    --active-accent: #1f6feb;
-    --active-accent-bg: rgba(31, 111, 235, 0.1);
+    --active-accent: #38444d;
+    --active-accent-bg: #1c2128;
+    --active-text: #8b949e;
 }
 
 body {
@@ -105,9 +106,13 @@ button:hover {
 }
 
 button.editing-state {
-    color: #58a6ff;
+    color: #c9d1d9;
     border-color: var(--active-accent);
     background-color: var(--active-accent-bg);
+}
+
+button.editing-state:hover {
+    background-color: var(--btn-hover);
 }
 
 .container {
@@ -218,5 +223,6 @@ textarea::-webkit-scrollbar {
 
 .diff-mode-active .panel-header {
     background-color: var(--active-accent-bg);
-    color: #58a6ff;
+    color: var(--active-text);
+    border-bottom: 1px solid var(--active-accent);
 }
