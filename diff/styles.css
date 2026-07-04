@@ -5,8 +5,6 @@
     --border-color: #30363d;
     --btn-bg: #21262d;
     --btn-hover: #30363d;
-
-    /* Git colors */
     --added-bg: rgba(46, 160, 67, 0.25);
     --removed-bg: rgba(248, 81, 73, 0.25);
     --empty-line-bg: rgba(255, 255, 255, 0.03);
@@ -154,10 +152,21 @@ textarea,
     padding: 12px;
     box-sizing: border-box;
     outline: none;
+}
+
+textarea {
     white-space: pre-wrap;
     word-break: break-all;
     overflow-y: auto;
     overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+textarea::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
 }
 
 .diff-output {
@@ -165,6 +174,9 @@ textarea,
     background-color: var(--panel-bg);
     min-width: 100%;
     width: max-content;
+    white-space: pre;
+    overflow-y: auto;
+    overflow-x: hidden;
     user-select: text;
     -webkit-user-select: text;
 }
