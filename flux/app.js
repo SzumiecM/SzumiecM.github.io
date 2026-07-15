@@ -23,6 +23,7 @@ const DEFAULT_IMG = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53M
 const savedVol = localStorage.getItem('flux_volume');
 const state = {
     audio: null,
+    pauseTimer: null,
     stations: [],
     favorites: loadFavorites(),
     // Changed: Defaults to 0.15 (15%) if nothing saved
@@ -82,6 +83,8 @@ function initAudio(isAnon) {
     state.audio.onpause = () => updatePlayerUI(false);
     
     state.audio.onerror = (e) => {
+        if (!state.audio.src) return; 
+
         els.playBtn.classList.remove('loading');
         showErrorState("Offline / Blocked", "Try External", state.currentStation?.url_resolved);
     };
@@ -277,7 +280,7 @@ function renderGrid(stations) {
 }
 
 function playStation(station) {
-    if(state.currentStation?.stationuuid === station.stationuuid && !state.audio.paused) {
+    if (state.currentStation?.stationuuid === station.stationuuid) {
         togglePlay();
         return;
     }
@@ -293,39 +296,10 @@ function playStation(station) {
 
     renderGrid(state.view === 'favorites' ? state.favorites : state.stations);
 
-    const streamUrl = sanitizeURL(station.url_resolved);
-
-    if (!streamUrl) {
-         showErrorState("Invalid Stream URL", null, null);
-         return;
-    }
-
-    const isMixedContent = window.location.protocol === 'https:' && streamUrl.startsWith('http:');
-
-    if (isMixedContent) {
-        showErrorState("Mixed Content Blocked.", "Open External", streamUrl);
-        updatePlayerUI(false);
-        return;
-    }
-
-    if (streamUrl.includes('.m3u') || streamUrl.includes('.pls')) {
-        showErrorState("Format Unsupported.", "Download Playlist", streamUrl);
-        return;
-    }
-
-    state.audio.src = streamUrl;
-    const p = state.audio.play();
-    
-    if(p) {
-        p.catch(error => {
-            console.error("Playback failed:", error);
-            if (error.name === 'NotAllowedError') {
-                els.playerMeta.textContent = "Autoplay Blocked. Click Play.";
-            } else {
-                 showErrorState("Connection Failed.", "Try Direct Link", streamUrl);
-            }
-        });
-    }
+    // Force play via our new togglePlay logic
+    state.audio.pause(); 
+    state.audio.removeAttribute('src'); // Clean up any prior station buffer
+    togglePlay(); 
 
     if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -337,8 +311,44 @@ function playStation(station) {
 }
 
 function togglePlay() {
-    if (!state.audio.src) return;
-    state.audio.paused ? state.audio.play() : state.audio.pause();
+    if (!state.currentStation) return;
+
+    if (state.audio.paused || !state.audio.src) {
+        // --- PLAY / RESUME ---
+        if (state.pauseTimer) {
+            clearTimeout(state.pauseTimer);
+            state.pauseTimer = null;
+        }
+
+        if (!state.audio.src) {
+            const streamUrl = sanitizeURL(state.currentStation.url_resolved);
+            if (!streamUrl) {
+                showErrorState("Invalid Stream URL", null, null);
+                return;
+            }
+            state.audio.src = streamUrl;
+            state.audio.load();
+        }
+
+        const p = state.audio.play();
+        if (p) {
+            p.catch(error => {
+                console.error("Playback failed:", error);
+                showErrorState("Connection Failed.", "Try Direct Link", state.audio.src);
+            });
+        }
+    } else {
+        // --- PAUSE ---
+        state.audio.pause();
+        updatePlayerUI(false);
+
+        state.pauseTimer = setTimeout(() => {
+            state.audio.removeAttribute('src'); 
+            state.audio.load();                 
+            state.pauseTimer = null;
+            console.log("Grace period expired: Connection safely closed.");
+        }, 15000); 
+    }
 }
 
 function toggleFavorite(station) {
@@ -460,8 +470,8 @@ function injectStaticIcons() {
     updateVolumeIcon();
 
     if ('mediaSession' in navigator) {
-        navigator.mediaSession.setActionHandler('play', () => state.audio.play());
-        navigator.mediaSession.setActionHandler('pause', () => state.audio.pause());
+        navigator.mediaSession.setActionHandler('play', () => togglePlay());
+        navigator.mediaSession.setActionHandler('pause', () => togglePlay());
     }
 
     setupEvents();
