@@ -217,12 +217,28 @@
     }
   }
 
+  const FAVICON_COLORS = {
+    focus: '#f59e0b',
+    shortBreak: '#10b981',
+    longBreak: '#8b5cf6'
+  };
+
+  function updateFavicon(type) {
+    const color = FAVICON_COLORS[type] || '#f59e0b';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+    let link = document.querySelector("link[rel*='icon']");
+    if (link) {
+      link.href = 'data:image/svg+xml;base64,' + btoa(svg);
+    }
+  }
+
   function applyCurrentBlockTheme() {
     document.documentElement.className = `state-${currentBlock.type}`;
     document.body.className = `state-${currentBlock.type}`;
     if (stateLabel) {
       stateLabel.textContent = currentBlock.label.toUpperCase();
     }
+    updateFavicon(currentBlock.type);
   }
 
   function updateAutoStartUI() {

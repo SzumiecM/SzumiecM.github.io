@@ -35,6 +35,12 @@
         var seq = map[p] || map.classic;
         var t = seq[b] || seq[0] || 'focus';
         document.documentElement.className = 'state-' + t;
+        var colors = { focus: '#f59e0b', shortBreak: '#10b981', longBreak: '#8b5cf6' };
+        var c = colors[t] || '#f59e0b';
+        var link = document.querySelector("link[rel*='icon']");
+        if (link) {
+          link.href = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="' + c + '" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>');
+        }
       } catch (e) { }
     })();
   </script>
