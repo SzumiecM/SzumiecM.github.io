@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Kairos — Minimalist Focus Engine</title>
+  <meta name="description" content="Minimalist, zero-dependency focus workflow engine and timebox planner.">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data:;
+    connect-src 'none';
+    form-action 'none';
+    media-src 'none';
+    object-src 'none';
+    base-uri 'none';
+  ">
+  <link rel="icon"
+    href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZjU5ZTBiIiBzdHJva2Utd2lkdGg9IjIiPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjEwIi8+PHBvbHlsaW5lIHBvaW50cz0iMTIgNiAxMiAxMiAxNiAxNCIvPjwvc3ZnPg==">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    (function () {
+      try {
+        var p = localStorage.getItem('kairos_active_preset') || 'classic';
+        var b = parseInt(localStorage.getItem('kairos_active_block') || '0', 10);
+        var map = {
+          classic: ['focus', 'shortBreak', 'focus', 'shortBreak', 'focus', 'shortBreak', 'focus', 'longBreak'],
+          deepWork: ['focus', 'shortBreak', 'focus', 'longBreak'],
+          sprint: ['focus', 'shortBreak', 'focus', 'shortBreak', 'focus', 'longBreak'],
+          test: ['focus', 'shortBreak', 'focus', 'longBreak']
+        };
+        var seq = map[p] || map.classic;
+        var t = seq[b] || seq[0] || 'focus';
+        document.documentElement.className = 'state-' + t;
+      } catch (e) { }
+    })();
+  </script>
+</head>
+
+<body>
+
+  <div class="bg-canvas">
+    <div class="bg-grid"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+  </div>
+
+  <div class="app-container">
+
+    <header>
+      <a href="../" class="brand" aria-label="Home">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Kairos</h1>
+          <span>Focus Engine</span>
+        </div>
+      </a>
+
+      <div class="top-nav">
+        <select id="bellSelect" class="icon-select" title="Choose Completion Bell Sound"
+          aria-label="Completion Bell Sound">
+          <option value="chime" selected>✨ Digital Chime (528Hz)</option>
+          <option value="zen">🔔 Zen Bowl (432Hz)</option>
+          <option value="marimba">🎵 Soft Bell (D5)</option>
+          <option value="none">🔇 Mute Bell</option>
+        </select>
+
+        <button id="testBellBtn" class="icon-btn" title="Test Selected Bell Sound">
+          ▶ Test Bell
+        </button>
+
+        <button id="autoStartBtn" class="icon-btn active" title="Toggle Auto-Start Next Session">
+          ⚡ Auto-Start Next
+        </button>
+
+        <button id="persistBtn" class="icon-btn active" title="Toggle Restore Session on Reload">
+          🔄 Restore Session: ON
+        </button>
+      </div>
+    </header>
+
+    <div class="preset-section">
+      <div class="preset-header">
+        <span class="preset-title">Select Recommended Workflow</span>
+      </div>
+      <div class="preset-buttons">
+        <button class="preset-btn" data-preset="classic">Classic Pomodoro (25/5)</button>
+        <button class="preset-btn" data-preset="deepWork">Deep Focus (50/10)</button>
+        <button class="preset-btn" data-preset="sprint">Quick Sprint (15/3)</button>
+        <button class="preset-btn" data-preset="test">⚡ Test Mode (15s)</button>
+      </div>
+    </div>
+
+    <div class="timeline-card">
+      <div class="timeline-header">
+        <span class="timeline-label">
+          <span>📅 Session Sequence Chart</span>
+        </span>
+        <span id="timelineSummary" class="timeline-summary">Loading workflow...</span>
+      </div>
+
+      <div id="timelineTrack" class="timeline-track">
+      </div>
+    </div>
+
+    <main class="timer-hero">
+      <div class="ring-container">
+        <svg class="ring-svg" viewBox="0 0 300 300">
+          <circle class="ring-bg" cx="150" cy="150" r="140"></circle>
+          <circle id="progressRing" class="ring-progress" cx="150" cy="150" r="140"></circle>
+        </svg>
+        <div class="timer-display">
+          <div id="timeDisplay" class="time-digits"></div>
+          <div id="stateLabel" class="state-label"></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="resetBtn" class="btn-secondary" title="Reset Current Clock (R)" aria-label="Reset Clock">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+            <path d="M3 3v5h5"></path>
+          </svg>
+        </button>
+
+        <button id="toggleBtn" class="btn-primary">Start</button>
+
+        <button id="skipBtn" class="btn-secondary" title="Next Session in Sequence (S)" aria-label="Next Session">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 4 15 12 5 20 5 4"></polygon>
+            <line x1="19" y1="5" x2="19" y2="19"></line>
+          </svg>
+        </button>
+      </div>
+    </main>
+
+    <div class="stats-grid">
+
+      <div class="stat-card">
+        <div class="stat-icon">⏳</div>
+        <div class="stat-info">
+          <span id="statSessions" class="stat-value">0 Completed</span>
+          <span class="stat-label">Sessions Today</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">⚡</div>
+        <div class="stat-info">
+          <span id="statTime" class="stat-value">0 mins</span>
+          <span class="stat-label">Focused Today</span>
+        </div>
+      </div>
+
+    </div>
+
+    <footer>
+      <div>&copy; 2026 SzumiecM · Built with pure HTML & CSS</div>
+      <div>Shortcuts: <span class="key-hint">Space</span> Play/Pause · <span class="key-hint">R</span> Reset Clock ·
+        <span class="key-hint">S</span> Next Block
+      </div>
+    </footer>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>

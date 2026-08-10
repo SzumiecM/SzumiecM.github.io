@@ -14,6 +14,8 @@
   --diff-red: #f85149;
   --diff-green: #3fb950;
   --diff-glow: rgba(63, 185, 80, 0.3);
+  --kairos-amber: #f59e0b;
+  --kairos-glow: rgba(245, 158, 11, 0.35);
   
   --font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -259,6 +261,10 @@ html, body {
   box-shadow: 0 20px 40px -15px var(--diff-glow), 0 0 25px rgba(63, 185, 80, 0.15);
 }
 
+.card-kairos:hover {
+  box-shadow: 0 20px 40px -15px var(--kairos-glow), 0 0 25px rgba(245, 158, 11, 0.15);
+}
+
 .card-header {
   display: flex;
   align-items: center;
@@ -319,6 +325,12 @@ html, body {
   border-color: rgba(63, 185, 80, 0.25);
 }
 
+.card-kairos .tag-badge {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
 .card-body {
   margin-bottom: 32px;
 }
@@ -367,6 +379,10 @@ html, body {
 
 .card-diff:hover .cta-text {
   color: #4ade80;
+}
+
+.card-kairos:hover .cta-text {
+  color: #fbbf24;
 }
 
 .arrow-icon {
