@@ -1,8 +1,120 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SzumiecM — Minimalist Web Apps</title>
+  <meta name="description" content="Minimalist, high-performance web applications built for speed, privacy, and clarity.">
+  <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0iIzA3MDkwZSIvPjxyZWN0IHdpZHRoPSIzMCIgaGVpZ2h0PSIzMCIgeD0iMSIgeT0iMSIgcng9IjciIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNnKSIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48cGF0aCBkPSJNMjEgMTAuNUMyMSA4LjUgMTkgNyAxNiA3QzEyLjUgNyAxMCA5IDEwIDExLjVDMTAgMTUgMjIgMTQuNSAyMiAxOS41QzIyIDIzIDE5IDI1IDE1LjUgMjVDMTIgMjUgMTAgMjMgMTAgMjEiIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNnKSIgc3Ryb2tlLXdpZHRoPSIyLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iZyIgeDE9IjAiIHkxPSIwIiB4Mj0iMzIiIHkyPSIzMiIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMwZDk0ODgiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMzZmI5NTAiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48L3N2Zz4=">
+  <link rel="stylesheet" href="style.css">
+</head>
 <body>
-  <h1>Welcome to SzumiecM</h1>
-  <p><a href="./flux/">Go to Flux Radio</a></p>
-  <p><a href="./diff/">Go to Diff tool</a></p>
+
+  <div class="bg-canvas">
+    <div class="bg-grid"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <div class="container">
+    <header class="hero">
+      <div class="badge">
+        <span class="pulse-dot"></span>
+        <span>SzumiecM · Web Apps</span>
+      </div>
+      <h1 class="title">Minimalist & Fast</h1>
+      <p class="subtitle">
+        Zero dependencies. Pure performance. Interactive web tools designed for seamless, distraction-free utility.
+      </p>
+    </header>
+
+    <main class="grid">
+      <a href="./flux/" class="card card-flux">
+        <div>
+          <div class="card-header">
+            <div class="icon-wrapper">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="7" width="20" height="13" rx="2" ry="2"></rect>
+                <path d="M16 2v5"></path>
+                <circle cx="12" cy="13" r="3"></circle>
+                <path d="M6 13v.01"></path>
+                <path d="M18 13v.01"></path>
+              </svg>
+            </div>
+            <span class="tag-badge">Live Stream</span>
+          </div>
+
+          <div class="card-body">
+            <h2 class="card-title">Flux Radio</h2>
+            <p class="card-description">
+              Lightweight internet radio streamer with real-time station discovery, genre tags, quick search, and favoriting.
+            </p>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <div class="pill-list">
+            <span class="mini-pill">Top 50</span>
+            <span class="mini-pill">·</span>
+            <span class="mini-pill">Genres</span>
+            <span class="mini-pill">·</span>
+            <span class="mini-pill">HTTPS</span>
+          </div>
+          <span class="cta-text">
+            Launch Station
+            <svg class="arrow-icon" viewBox="0 0 24 24">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </span>
+        </div>
+      </a>
+
+      <a href="./diff/" class="card card-diff">
+        <div>
+          <div class="card-header">
+            <div class="icon-wrapper">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 17l-5-5 5-5" stroke="#f85149"/>
+                <path d="M16 7l5 5-5 5" stroke="#3fb950"/>
+                <path d="M12 3v18" stroke="rgba(255,255,255,0.3)" stroke-dasharray="2 2"/>
+              </svg>
+            </div>
+            <span class="tag-badge">Utility</span>
+          </div>
+
+          <div class="card-body">
+            <h2 class="card-title">Diff Tool</h2>
+            <p class="card-description">
+              Clean side-by-side and line-by-line text and code comparator with live stats tracking for additions and deletions.
+            </p>
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <div class="pill-list">
+            <span class="mini-pill">Side-by-side</span>
+            <span class="mini-pill">·</span>
+            <span class="mini-pill">Visual Diff</span>
+          </div>
+          <span class="cta-text">
+            Compare Text
+            <svg class="arrow-icon" viewBox="0 0 24 24">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </span>
+        </div>
+      </a>
+    </main>
+
+    <footer>
+      <div>&copy; 2026 SzumiecM · Built with pure HTML & CSS</div>
+      <div class="footer-links">
+        <a href="./flux/" class="footer-link">Flux Radio</a>
+        <a href="./diff/" class="footer-link">Diff Tool</a>
+      </div>
+    </footer>
+  </div>
+
 </body>
 </html>
