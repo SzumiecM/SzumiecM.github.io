@@ -44,6 +44,7 @@
   const gridEl = document.getElementById('sudoku-grid');
   const timerEl = document.getElementById('timer-text');
   const btnNewGame = document.getElementById('btn-new-game');
+  const btnReset = document.getElementById('btn-reset');
   const btnUndo = document.getElementById('btn-undo');
   const btnErase = document.getElementById('btn-erase');
   const btnPencil = document.getElementById('btn-pencil');
@@ -275,6 +276,38 @@
     const generated = SudokuAlgo.generatePuzzle(difficulty);
     puzzle = generated.puzzle;
     solution = generated.solution;
+    board = new Uint8Array(puzzle);
+    notes = new Uint16Array(81);
+
+    saveCurrentSession();
+    renderFullBoard();
+    updateKeypadCounts();
+    startTimer();
+
+    let firstEmpty = board.findIndex(v => v === 0);
+    selectCell(firstEmpty !== -1 ? firstEmpty : 0);
+  }
+
+  // --- Game Flow: Reset Board to Original Clues ---
+  function resetCurrentGame(askConfirm = true) {
+    const hasProgress = board.some((v, i) => puzzle[i] === 0 && v !== 0) || notes.some(mask => mask !== 0);
+    if (askConfirm && !isCompleted && hasProgress) {
+      if (!confirm('Reset this puzzle to its starting state? All entered numbers and notes will be cleared.')) {
+        return;
+      }
+    }
+
+    stopTimer();
+    timerSeconds = 0;
+    updateTimerDisplay();
+
+    isCompleted = false;
+    history = [];
+    redoStack = [];
+    selectedIdx = null;
+    victoryModal.classList.remove('active');
+
+    // Restore board strictly from initial clues
     board = new Uint8Array(puzzle);
     notes = new Uint16Array(81);
 
@@ -1039,6 +1072,7 @@
       }
     }
 
+    if (btnReset) btnReset.addEventListener('click', () => resetCurrentGame(true));
     btnNewGame.addEventListener('click', () => startNewGame(true));
     btnPlayAgain.addEventListener('click', () => startNewGame(false));
 

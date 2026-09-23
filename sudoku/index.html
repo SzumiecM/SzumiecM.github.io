@@ -62,13 +62,23 @@
           <span id="timer-text">00:00</span>
         </div>
 
-        <button id="btn-new-game" class="action-text-btn" aria-label="New Game">
+        <button id="btn-reset" class="action-text-btn btn-reset" aria-label="Reset Puzzle" title="Reset puzzle to original state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+            <path d="M3 3v5h5"></path>
+          </svg>
+          <span>Reset</span>
+        </button>
+
+        <button id="btn-new-game" class="action-text-btn" aria-label="New Game" title="Generate a new puzzle">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
             stroke-linejoin="round">
             <polyline points="23 4 23 10 17 10"></polyline>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
           </svg>
-          <span>New Game</span>
+          <span class="btn-text-full">New Game</span>
+          <span class="btn-text-short">New</span>
         </button>
       </div>
     </header>

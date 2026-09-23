@@ -207,6 +207,22 @@ header {
   height: 13px;
 }
 
+.action-text-btn.btn-reset {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border-color);
+  color: var(--text-sub);
+}
+
+.action-text-btn.btn-reset:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-light);
+  color: var(--text-main);
+}
+
+.btn-text-short {
+  display: none;
+}
+
 /* Difficulty Tabs */
 .difficulty-bar {
   width: 100%;
@@ -424,7 +440,6 @@ header {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 2px solid var(--border-light);
-  border-radius: 12px;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 24px rgba(99, 102, 241, 0.1);
   overflow: hidden;
   -webkit-touch-callout: none;
@@ -983,19 +998,32 @@ button:focus-visible,
     padding: 0.8rem 0.6rem 2.5rem;
     gap: 0.75rem;
   }
+  .brand-icon {
+    width: 30px;
+    height: 30px;
+  }
+  .brand-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+  .brand-text h1 {
+    font-size: 1.15rem;
+  }
   .brand-text span {
     display: none;
   }
   .header-actions {
-    gap: 0.35rem;
+    gap: 0.25rem;
   }
   .timer-box {
-    padding: 0.28rem 0.45rem;
-    font-size: 0.82rem;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.8rem;
+    gap: 0.25rem;
   }
   .action-text-btn {
-    padding: 0.3rem 0.55rem;
-    font-size: 0.75rem;
+    padding: 0.28rem 0.48rem;
+    font-size: 0.73rem;
+    gap: 0.25rem;
   }
   .assist-seg-btn {
     padding: 0.38rem 0.3rem;
@@ -1007,5 +1035,14 @@ button:focus-visible,
   }
   .num-digit {
     font-size: 1.15rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .btn-text-full {
+    display: none;
+  }
+  .btn-text-short {
+    display: inline;
   }
 }
