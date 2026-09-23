@@ -175,7 +175,7 @@ header {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  transition: all 0.2s ease;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .action-text-btn:hover {
@@ -218,7 +218,7 @@ header {
 
 .diff-btn {
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   color: var(--text-dim);
   font-family: inherit;
   font-size: 0.8rem;
@@ -226,7 +226,7 @@ header {
   padding: 0.45rem 0.2rem;
   border-radius: 7px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   text-align: center;
 }
 
@@ -308,7 +308,7 @@ header {
   gap: 0.45rem;
   font-size: 0.8rem;
   font-weight: 600;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   -webkit-touch-callout: none;
   touch-action: manipulation;
 }
@@ -603,7 +603,7 @@ header {
   font-family: inherit;
   font-size: 0.75rem;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .tool-btn:hover {
@@ -660,7 +660,7 @@ header {
   align-items: center;
   justify-content: center;
   padding: 4px 0 3px;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -825,7 +825,7 @@ header {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   z-index: 2;
 }
 
@@ -944,7 +944,7 @@ header {
 
 .victory-btn {
   background: var(--accent-primary);
-  border: none;
+  border: 1px solid transparent;
   color: #ffffff;
   font-family: inherit;
   font-size: 0.95rem;

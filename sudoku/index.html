@@ -19,6 +19,8 @@
     base-uri 'none';
   ">
   <link rel="icon" href="logo.svg">
+  <link rel="preload" href="algo.js" as="script">
+  <link rel="preload" href="app.js" as="script">
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -84,14 +86,14 @@
     <!-- Difficulty Selector -->
     <div class="difficulty-bar" role="tablist" aria-label="Difficulty Levels">
       <button class="diff-btn" data-diff="easy" role="tab">Easy</button>
-      <button class="diff-btn active" data-diff="medium" role="tab">Medium</button>
+      <button class="diff-btn" data-diff="medium" role="tab">Medium</button>
       <button class="diff-btn" data-diff="hard" role="tab">Hard</button>
       <button class="diff-btn" data-diff="expert" role="tab">Expert</button>
     </div>
 
     <!-- Assist / Guide Mode Bar (Centered in middle screen, spacious touch targets) -->
     <div class="assist-bar">
-      <div class="assist-segmented-wrap" id="assist-control" data-level="2" role="radiogroup" aria-label="Highlight and assist mode">
+      <div class="assist-segmented-wrap" id="assist-control" role="radiogroup" aria-label="Highlight and assist mode">
         <button type="button" class="assist-seg-btn" data-level="0" role="radio" aria-checked="false" aria-label="Level 0: Clean">
           <span class="seg-num">0</span>
           <span class="seg-label">Clean</span>
@@ -100,7 +102,7 @@
           <span class="seg-num">1</span>
           <span class="seg-label">Warn</span>
         </button>
-        <button type="button" class="assist-seg-btn active" data-level="2" role="radio" aria-checked="true" aria-label="Level 2: Guide">
+        <button type="button" class="assist-seg-btn" data-level="2" role="radio" aria-checked="false" aria-label="Level 2: Guide">
           <span class="seg-num">2</span>
           <span class="seg-label">Guide</span>
         </button>
@@ -172,6 +174,42 @@
       <span class="hint-dot">•</span>
       <span class="hint-group"><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Y</kbd> <span class="hint-label">Undo / Redo</span></span>
     </div>
+
+    <!-- Pre-paint Synchronous State Restoration: Eliminates Hydration FOUC & Jumps -->
+    <script>
+      (function() {
+        try {
+          var diff = localStorage.getItem('sudoku_active_difficulty_v2') || 'medium';
+          if (['easy', 'medium', 'hard', 'expert'].indexOf(diff) === -1) diff = 'medium';
+          var dBtn = document.querySelector('.diff-btn[data-diff="' + diff + '"]');
+          if (dBtn) dBtn.classList.add('active');
+
+          var assist = localStorage.getItem('sudoku_assist_level_v1');
+          var lvl = (assist !== null && ['0', '1', '2'].indexOf(assist) !== -1) ? assist : '2';
+          var wrap = document.getElementById('assist-control');
+          if (wrap) wrap.dataset.level = lvl;
+          var aBtn = document.querySelector('.assist-seg-btn[data-level="' + lvl + '"]');
+          if (aBtn) {
+            aBtn.classList.add('active');
+            aBtn.setAttribute('aria-checked', 'true');
+          }
+
+          var sessions = JSON.parse(localStorage.getItem('sudoku_saved_sessions_v2') || '{}');
+          var sess = sessions[diff];
+          if (sess && typeof sess.timerSeconds === 'number') {
+            var m = String(Math.floor(sess.timerSeconds / 60)).padStart(2, '0');
+            var s = String(sess.timerSeconds % 60).padStart(2, '0');
+            var tEl = document.getElementById('timer-text');
+            if (tEl) tEl.textContent = m + ':' + s;
+          }
+
+          if (lvl === '0') {
+            var kp = document.querySelector('.keypad');
+            if (kp) kp.classList.add('hide-counts');
+          }
+        } catch(e) {}
+      })();
+    </script>
 
   </div>
 
