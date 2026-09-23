@@ -682,7 +682,6 @@
     timerInterval = setInterval(() => {
       timerSeconds++;
       updateTimerDisplay();
-      if (timerSeconds % 5 === 0) saveCurrentSession();
     }, 1000);
   }
 
