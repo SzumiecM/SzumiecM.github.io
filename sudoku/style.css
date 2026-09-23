@@ -3,7 +3,7 @@
   --bg-card: rgba(16, 20, 32, 0.75);
   --bg-card-hover: rgba(24, 30, 48, 0.85);
   --border-color: rgba(255, 255, 255, 0.08);
-  --border-light: rgba(255, 255, 255, 0.16);
+  --border-light: rgba(255, 255, 255, 0.18);
 
   --text-main: #f8fafc;
   --text-sub: #94a3b8;
@@ -15,12 +15,12 @@
   --accent-hover: #4f46e5;
 
   --cell-initial-color: #f8fafc;
-  --cell-user-color: #818cf8;
-  --cell-selected-bg: rgba(99, 102, 241, 0.28);
-  --cell-related-bg: rgba(99, 102, 241, 0.08);
-  --cell-match-bg: rgba(99, 102, 241, 0.22);
-  --cell-conflict-bg: rgba(239, 68, 68, 0.25);
-  --cell-conflict-color: #f87171;
+  --cell-user-color: #38bdf8;
+  --cell-selected-bg: rgba(99, 102, 241, 0.32);
+  --cell-related-bg: rgba(99, 102, 241, 0.09);
+  --cell-match-bg: rgba(99, 102, 241, 0.35);
+  --cell-conflict-bg: rgba(239, 68, 68, 0.28);
+  --cell-conflict-color: #fca5a5;
 
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -178,29 +178,30 @@ header {
   gap: 0.5rem;
 }
 
-.icon-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-sub);
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+.action-text-btn {
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.8rem;
+  border-radius: 7px;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
+  gap: 0.35rem;
   transition: all 0.2s ease;
 }
 
-.icon-btn:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-main);
-  border-color: var(--border-light);
+.action-text-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.5);
 }
 
-.icon-btn svg {
-  width: 18px;
-  height: 18px;
+.action-text-btn svg {
+  width: 13px;
+  height: 13px;
 }
 
 /* Difficulty Tabs */
@@ -270,38 +271,6 @@ header {
   color: var(--accent-secondary);
 }
 
-.status-right {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.action-text-btn {
-  background: rgba(99, 102, 241, 0.15);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  color: var(--text-main);
-  font-family: inherit;
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 0.35rem 0.8rem;
-  border-radius: 7px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  transition: all 0.2s ease;
-}
-
-.action-text-btn:hover {
-  background: rgba(99, 102, 241, 0.25);
-  border-color: rgba(99, 102, 241, 0.5);
-}
-
-.action-text-btn svg {
-  width: 13px;
-  height: 13px;
-}
-
 /* Sudoku Board Wrapper */
 .board-wrapper {
   position: relative;
@@ -310,7 +279,7 @@ header {
   background: var(--bg-card);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 2px solid rgba(255, 255, 255, 0.18);
+  border: 2px solid var(--border-light);
   border-radius: 12px;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 24px rgba(99, 102, 241, 0.1);
   overflow: hidden;
@@ -331,14 +300,15 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
   border-right: 1px solid var(--border-color);
   border-bottom: 1px solid var(--border-color);
-  font-size: clamp(1.2rem, 4.5vw, 1.7rem);
   font-family: var(--font-sans);
-  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.15s ease, transform 0.1s ease, color 0.15s ease;
+  transition: background-color 0.15s ease;
   outline: none;
+  padding: 0;
+  margin: 0;
 }
 
 /* Thick 3x3 block borders */
@@ -359,34 +329,62 @@ header {
   border-bottom: none;
 }
 
-/* Cell States */
-.cell.initial {
+/* Cell Value Display (Pixel-Perfect Horizontal & Vertical Centering) */
+.cell-val {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
+  font-size: clamp(1.25rem, 4.8vw, 1.8rem);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Initial Puzzle Clues (Crisp Bold White) */
+.cell.initial .cell-val {
   color: var(--cell-initial-color);
   font-weight: 700;
 }
 
-.cell.user-filled {
+/* Player Filled Numbers (Vibrant Cyan / Soft Blue) */
+.cell.user-filled .cell-val {
   color: var(--cell-user-color);
   font-weight: 600;
 }
 
+/* Crosshair Highlight (Row, Col, Box) */
 .cell.related {
   background-color: var(--cell-related-bg);
 }
 
+/* Matching Numbers Across Grid */
 .cell.same-number {
-  background-color: var(--cell-match-bg);
+  background-color: var(--cell-match-bg) !important;
+  box-shadow: inset 0 0 0 1.5px rgba(165, 180, 252, 0.5);
 }
 
+.cell.same-number .cell-val {
+  filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.9));
+}
+
+/* Selected Active Cell */
 .cell.selected {
   background-color: var(--cell-selected-bg) !important;
-  box-shadow: inset 0 0 0 2px var(--accent-secondary);
+  box-shadow: inset 0 0 0 2px var(--accent-secondary), 0 0 16px rgba(99, 102, 241, 0.4);
 }
 
+/* Conflicting / Error Cell */
 .cell.conflict {
   background-color: var(--cell-conflict-bg) !important;
-  color: var(--cell-conflict-color) !important;
+  box-shadow: inset 0 0 0 1.5px #ef4444;
   animation: shake 0.3s ease-in-out;
+}
+
+.cell.conflict .cell-val {
+  color: var(--cell-conflict-color) !important;
 }
 
 @keyframes shake {
@@ -396,23 +394,12 @@ header {
 }
 
 /* Pencil Notes Sub-Grid (3x3 inside cell) */
-.cell-val {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
 .notes-grid {
   position: absolute;
   inset: 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  width: 100%;
-  height: 100%;
   padding: 2px;
   pointer-events: none;
 }
@@ -421,6 +408,7 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
   font-size: clamp(0.55rem, 1.8vw, 0.72rem);
   font-family: var(--font-mono);
   font-weight: 600;
@@ -534,9 +522,7 @@ header {
   pointer-events: none;
 }
 
-/* ============================================================
-   ROTARY DIAL / POPUP WHEEL FOR MOBILE (Hold cell interaction)
-   ============================================================ */
+/* Rotary Dial Popup for Mobile */
 .rotary-overlay {
   position: fixed;
   inset: 0;
@@ -575,7 +561,6 @@ header {
   opacity: 1;
 }
 
-/* Ring track decorations */
 .rotary-wheel::before {
   content: '';
   position: absolute;
@@ -585,7 +570,6 @@ header {
   pointer-events: none;
 }
 
-/* Center Erase / Cancel Button */
 .rotary-center {
   position: absolute;
   top: 50%;
@@ -616,7 +600,6 @@ header {
   box-shadow: 0 0 16px rgba(239, 68, 68, 0.5);
 }
 
-/* Radial Number Spoke Items (1-9 positioned around 360°) */
 .rotary-item {
   position: absolute;
   width: 42px;

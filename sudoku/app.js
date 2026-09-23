@@ -1,7 +1,7 @@
 /**
  * Sudoku UI & Interaction Controller - Zero Dependencies
  * Manages grid rendering, keyboard navigation, rotary dial touch gestures,
- * pencil notes, undo history, and game progression.
+ * pencil notes, undo history, per-difficulty game state persistence, and game progression.
  */
 
 (function () {
@@ -31,6 +31,10 @@
   let activeRotaryHover = null; // null, 0 (clear), or 1..9
   let wheelCenter = { x: 0, y: 0 };
 
+  // Storage key for multi-difficulty sessions
+  const SESSIONS_STORAGE_KEY = 'sudoku_saved_sessions_v2';
+  const DIFFICULTY_STORAGE_KEY = 'sudoku_active_difficulty_v2';
+
   // DOM Elements
   const gridEl = document.getElementById('sudoku-grid');
   const timerEl = document.getElementById('timer-text');
@@ -48,20 +52,88 @@
   const victoryDiffEl = document.getElementById('victory-diff');
   const btnPlayAgain = document.getElementById('btn-play-again');
 
+  // --- Session Storage Helpers ---
+  function getStoredSessions() {
+    try {
+      const data = localStorage.getItem(SESSIONS_STORAGE_KEY);
+      return data ? JSON.parse(data) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveCurrentSession() {
+    try {
+      const sessions = getStoredSessions();
+      sessions[difficulty] = {
+        puzzle: Array.from(puzzle),
+        board: Array.from(board),
+        solution: Array.from(solution),
+        notes: Array.from(notes),
+        timerSeconds,
+        history,
+        isCompleted
+      };
+      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+      localStorage.setItem(DIFFICULTY_STORAGE_KEY, difficulty);
+    } catch (e) {
+      console.warn('Could not save session to localStorage', e);
+    }
+  }
+
+  function loadStoredSession(diff) {
+    try {
+      const sessions = getStoredSessions();
+      const s = sessions[diff];
+      if (s && s.puzzle && s.puzzle.length === 81) {
+        puzzle = Uint8Array.from(s.puzzle);
+        board = Uint8Array.from(s.board);
+        solution = Uint8Array.from(s.solution);
+        notes = Uint16Array.from(s.notes);
+        timerSeconds = s.timerSeconds || 0;
+        history = s.history || [];
+        isCompleted = !!s.isCompleted;
+        return true;
+      }
+    } catch (e) {
+      console.warn('Could not load session from localStorage', e);
+    }
+    return false;
+  }
+
+  function clearSession(diff) {
+    try {
+      const sessions = getStoredSessions();
+      delete sessions[diff];
+      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+    } catch (e) {}
+  }
+
   // --- Initialization ---
   function init() {
     createGridCells();
     setupRotaryDial();
     bindEvents();
 
-    // Load preferred difficulty from storage or default to medium
-    const savedDiff = localStorage.getItem('sudoku_difficulty');
+    // Restore last active difficulty or default to medium
+    const savedDiff = localStorage.getItem(DIFFICULTY_STORAGE_KEY);
     if (savedDiff && ['easy', 'medium', 'hard', 'expert'].includes(savedDiff)) {
       difficulty = savedDiff;
     }
     updateDiffButtons();
 
-    startNewGame();
+    // Check if an existing session exists for this difficulty
+    if (loadStoredSession(difficulty)) {
+      renderFullBoard();
+      updateKeypadCounts();
+      updateTimerDisplay();
+      if (!isCompleted) startTimer();
+
+      let firstEmpty = board.findIndex(v => v === 0);
+      selectCell(firstEmpty !== -1 ? firstEmpty : 0);
+    } else {
+      startNewGame(false);
+    }
   }
 
   // --- Grid Construction ---
@@ -86,7 +158,7 @@
       }
       cell.appendChild(notesGrid);
 
-      // Main value display container
+      // Main value display container (positioned absolute + flex centered)
       const valSpan = document.createElement('span');
       valSpan.className = 'cell-val';
       cell.appendChild(valSpan);
@@ -97,14 +169,11 @@
 
   // --- Setup Rotary Dial Items (Positioned radially) ---
   function setupRotaryDial() {
-    // Digits 1 to 9 arranged around a circle of radius 78px
-    // Starting angle at -90deg (top) and stepping by 40deg (360 / 9)
     const radius = 78;
     const items = rotaryWheel.querySelectorAll('.rotary-item');
 
     items.forEach((item) => {
       const num = parseInt(item.dataset.num, 10);
-      // Angle: 1 at top-ish, clockwise
       const angleDeg = -90 + (num - 1) * 40;
       const angleRad = (angleDeg * Math.PI) / 180;
       const x = 110 + radius * Math.cos(angleRad);
@@ -116,7 +185,13 @@
   }
 
   // --- Game Flow: New Game ---
-  function startNewGame() {
+  function startNewGame(askConfirm = true) {
+    if (askConfirm && !isCompleted && board.some((v, i) => puzzle[i] === 0 && v !== 0)) {
+      if (!confirm(`Start a new ${SudokuAlgo.DIFFICULTY_CONFIG[difficulty].label} puzzle? Current progress on this difficulty will be reset.`)) {
+        return;
+      }
+    }
+
     stopTimer();
     timerSeconds = 0;
     updateTimerDisplay();
@@ -133,24 +208,42 @@
     board = new Uint8Array(puzzle);
     notes = new Uint16Array(81);
 
+    saveCurrentSession();
     renderFullBoard();
     updateKeypadCounts();
     startTimer();
 
-    // Select first empty cell or cell 0
     let firstEmpty = board.findIndex(v => v === 0);
     selectCell(firstEmpty !== -1 ? firstEmpty : 0);
   }
 
-  function restartCurrentPuzzle() {
-    if (confirm('Restart current puzzle from the beginning?')) {
-      board = new Uint8Array(puzzle);
-      notes = new Uint16Array(81);
-      history = [];
-      isCompleted = false;
+  // --- Switching Difficulty with State Preservation ---
+  function switchDifficulty(newDiff) {
+    if (newDiff === difficulty) return;
+
+    // 1. Save current game before switching
+    saveCurrentSession();
+    stopTimer();
+
+    // 2. Switch difficulty
+    difficulty = newDiff;
+    localStorage.setItem(DIFFICULTY_STORAGE_KEY, difficulty);
+    updateDiffButtons();
+    selectedIdx = null;
+    victoryModal.classList.remove('active');
+
+    // 3. Try to resume existing game for the new difficulty
+    if (loadStoredSession(difficulty)) {
       renderFullBoard();
       updateKeypadCounts();
-      if (selectedIdx !== null) selectCell(selectedIdx);
+      updateTimerDisplay();
+      if (!isCompleted) startTimer();
+
+      let firstEmpty = board.findIndex(v => v === 0);
+      selectCell(firstEmpty !== -1 ? firstEmpty : 0);
+    } else {
+      // Otherwise, generate fresh game
+      startNewGame(false);
     }
   }
 
@@ -163,19 +256,23 @@
       const cell = cells[i];
       const val = board[i];
       const isInitial = puzzle[i] !== 0;
+      const isUserFilled = !isInitial && val !== 0;
       const valSpan = cell.querySelector('.cell-val');
       const notesGrid = cell.querySelector('.notes-grid');
 
       // Reset state classes
       cell.className = 'cell';
-      if (isInitial) cell.classList.add('initial');
-      else if (val !== 0) cell.classList.add('user-filled');
+      if (isInitial) {
+        cell.classList.add('initial');
+      } else if (isUserFilled) {
+        cell.classList.add('user-filled');
+      }
 
       if (conflicts.has(i)) cell.classList.add('conflict');
 
       if (val !== 0) {
         valSpan.textContent = val;
-        valSpan.style.display = 'block';
+        valSpan.style.display = 'flex';
         notesGrid.style.display = 'none';
       } else {
         valSpan.textContent = '';
@@ -206,16 +303,17 @@
 
     const val = board[idx];
     const isInitial = puzzle[idx] !== 0;
+    const isUserFilled = !isInitial && val !== 0;
     const valSpan = cell.querySelector('.cell-val');
     const notesGrid = cell.querySelector('.notes-grid');
 
     cell.classList.remove('user-filled', 'initial');
     if (isInitial) cell.classList.add('initial');
-    else if (val !== 0) cell.classList.add('user-filled');
+    else if (isUserFilled) cell.classList.add('user-filled');
 
     if (val !== 0) {
       valSpan.textContent = val;
-      valSpan.style.display = 'block';
+      valSpan.style.display = 'flex';
       notesGrid.style.display = 'none';
     } else {
       valSpan.textContent = '';
@@ -235,7 +333,6 @@
       }
     }
 
-    // Refresh conflicts on all cells
     updateConflictClasses();
     applySelectionHighlights();
     updateKeypadCounts();
@@ -299,36 +396,35 @@
   // --- Input Handling: Digits & Notes ---
   function placeNumber(num) {
     if (selectedIdx === null || isCompleted) return;
-
-    // Fixed clues cannot be altered
-    if (puzzle[selectedIdx] !== 0) return;
+    if (puzzle[selectedIdx] !== 0) return; // Clues cannot be altered
 
     const prevVal = board[selectedIdx];
     const prevNotes = notes[selectedIdx];
 
     if (pencilMode) {
       if (num === 0) {
-        // Clear all notes for this cell
         if (prevNotes !== 0) {
           notes[selectedIdx] = 0;
           history.push({ type: 'notes', index: selectedIdx, prevVal, newVal: prevVal, prevNotes, newNotes: 0 });
           renderSingleCell(selectedIdx);
+          saveCurrentSession();
         }
       } else {
-        // Toggle candidate note
         const newNotes = prevNotes ^ (1 << num);
         notes[selectedIdx] = newNotes;
-        board[selectedIdx] = 0; // Clear value if taking notes
+        board[selectedIdx] = 0;
         history.push({ type: 'notes', index: selectedIdx, prevVal, newVal: 0, prevNotes, newNotes });
         renderSingleCell(selectedIdx);
+        saveCurrentSession();
       }
     } else {
-      if (prevVal === num) return; // No change
+      if (prevVal === num) return;
 
       board[selectedIdx] = num;
-      notes[selectedIdx] = 0; // Clear notes when number is placed
+      notes[selectedIdx] = 0;
       history.push({ type: 'set', index: selectedIdx, prevVal, newVal: num, prevNotes, newNotes: 0 });
       renderSingleCell(selectedIdx);
+      saveCurrentSession();
 
       checkVictoryCondition();
     }
@@ -347,6 +443,7 @@
     notes[selectedIdx] = 0;
     history.push({ type: 'clear', index: selectedIdx, prevVal, newVal: 0, prevNotes, newNotes: 0 });
     renderSingleCell(selectedIdx);
+    saveCurrentSession();
   }
 
   function undoLastMove() {
@@ -356,6 +453,7 @@
     notes[action.index] = action.prevNotes;
     selectedIdx = action.index;
     renderSingleCell(action.index);
+    saveCurrentSession();
   }
 
   // --- Keypad Remaining Counts ---
@@ -382,18 +480,16 @@
 
   // --- Victory Verification ---
   function checkVictoryCondition() {
-    // 1. All cells must be non-zero
     for (let i = 0; i < 81; i++) {
       if (board[i] === 0) return;
     }
 
-    // 2. No conflicts on board
     const conflicts = SudokuAlgo.findConflicts(board);
     if (conflicts.size > 0) return;
 
-    // Victory achieved!
     isCompleted = true;
     stopTimer();
+    saveCurrentSession();
 
     victoryTimeEl.textContent = formatTime(timerSeconds);
     victoryDiffEl.textContent = SudokuAlgo.DIFFICULTY_CONFIG[difficulty].label;
@@ -402,11 +498,13 @@
 
   // --- Timer Functions ---
   function startTimer() {
-    if (isTimerRunning) return;
+    if (isTimerRunning || isCompleted) return;
     isTimerRunning = true;
     timerInterval = setInterval(() => {
       timerSeconds++;
       updateTimerDisplay();
+      // Periodically save timer every 5 seconds
+      if (timerSeconds % 5 === 0) saveCurrentSession();
     }, 1000);
   }
 
@@ -425,7 +523,7 @@
     timerEl.textContent = formatTime(timerSeconds);
   }
 
-  // --- Difficulty Buttons ---
+  // --- Difficulty Buttons Display ---
   function updateDiffButtons() {
     diffButtons.forEach((btn) => {
       if (btn.dataset.diff === difficulty) {
@@ -438,7 +536,6 @@
 
   // --- Keyboard Navigation (Arrows, WASD, HJKL, 1-9, Notes, Undo) ---
   function handleKeyDown(e) {
-    // Ignore keyboard input if modal or overlay is active
     if (victoryModal.classList.contains('active')) return;
     if (isRotaryOpen) {
       if (e.key === 'Escape') closeRotaryDial();
@@ -531,7 +628,6 @@
     rotaryCellIdx = cellIdx;
     isRotaryOpen = true;
 
-    // Position wheel centered at touch point, bounded inside viewport
     const wheelRadius = 110;
     const padding = 15;
     let x = Math.max(wheelRadius + padding, Math.min(window.innerWidth - wheelRadius - padding, clientX));
@@ -543,7 +639,6 @@
 
     rotaryOverlay.classList.add('active');
 
-    // Subtle haptic tick if supported
     if (navigator.vibrate) navigator.vibrate(12);
   }
 
@@ -554,27 +649,21 @@
     const dy = clientY - wheelCenter.y;
     const dist = Math.hypot(dx, dy);
 
-    // Reset hover classes
     rotaryCenter.classList.remove('hovered');
     rotaryWheel.querySelectorAll('.rotary-item').forEach(el => el.classList.remove('hovered'));
 
     if (dist < 32) {
-      // Hovering center Erase
       rotaryCenter.classList.add('hovered');
       activeRotaryHover = 0;
       return;
     }
 
     if (dist >= 45 && dist <= 145) {
-      // Calculate angle (-180 to 180 deg)
       let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-      // Normalize angle to match digit positions (digit 1 is at -90 deg)
-      // angle relative to digit 1:
       let relAngle = angle - (-90);
       while (relAngle < 0) relAngle += 360;
       while (relAngle >= 360) relAngle -= 360;
 
-      // Each spoke covers 40 degrees
       const digitIndex = Math.round(relAngle / 40) % 9;
       const hoveredNum = digitIndex + 1;
 
@@ -616,7 +705,6 @@
 
   // --- Event Bindings ---
   function bindEvents() {
-    // Window Keyboard Listener
     window.addEventListener('keydown', handleKeyDown);
 
     // Grid Cell Click & Long-Press Delegation
@@ -627,10 +715,8 @@
       const idx = parseInt(cell.dataset.index, 10);
       const isClue = puzzle[idx] !== 0;
 
-      // Select cell immediately
       selectCell(idx);
 
-      // Start long-press timer for rotary dial on mutable cells
       if (!isClue && !isCompleted) {
         clearTimeout(longPressTimeout);
         longPressTimeout = setTimeout(() => {
@@ -639,7 +725,6 @@
       }
     });
 
-    // Cancel long press if finger moves or lifts early
     window.addEventListener('pointermove', (e) => {
       if (longPressTimeout) {
         clearTimeout(longPressTimeout);
@@ -690,15 +775,11 @@
       }
     });
 
-    // Difficulty Buttons
+    // Difficulty Tab Buttons with session state preservation
     diffButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
         const newDiff = btn.dataset.diff;
-        if (newDiff === difficulty) return;
-        difficulty = newDiff;
-        localStorage.setItem('sudoku_difficulty', difficulty);
-        updateDiffButtons();
-        startNewGame();
+        switchDifficulty(newDiff);
       });
     });
 
@@ -715,19 +796,23 @@
       });
     });
 
-    // Header / Modal Buttons
-    btnNewGame.addEventListener('click', () => {
-      if (confirm('Start a new puzzle?')) startNewGame();
-    });
-    btnPlayAgain.addEventListener('click', startNewGame);
+    // Header & Modal New Game Buttons
+    btnNewGame.addEventListener('click', () => startNewGame(true));
+    btnPlayAgain.addEventListener('click', () => startNewGame(false));
 
     // Pause timer on tab switch
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         stopTimer();
+        saveCurrentSession();
       } else if (!isCompleted) {
         startTimer();
       }
+    });
+
+    // Save session on page unload
+    window.addEventListener('beforeunload', () => {
+      saveCurrentSession();
     });
   }
 
