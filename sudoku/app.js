@@ -678,7 +678,13 @@
 
   // --- Keyboard Navigation (Custom Step, 3x3 Jump, Edge Jump, Undo, Redo) ---
   function handleKeyDown(e) {
-    if (victoryModal.classList.contains('active')) return;
+    if (victoryModal.classList.contains('active')) {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+        startNewGame(false);
+        e.preventDefault();
+      }
+      return;
+    }
     if (isRotaryOpen) {
       if (e.key === 'Escape') closeRotaryDial();
       return;
@@ -1042,13 +1048,13 @@
     });
 
     // Action Bar Buttons
-    btnUndo.addEventListener('click', undoLastMove);
-    btnErase.addEventListener('click', eraseSelectedCell);
-    btnPencil.addEventListener('click', togglePencilMode);
+    attachDragSafeClick(btnUndo, undoLastMove);
+    attachDragSafeClick(btnErase, eraseSelectedCell);
+    attachDragSafeClick(btnPencil, togglePencilMode);
 
     // Number Keypad Buttons
     numButtons.forEach((btn) => {
-      btn.addEventListener('click', () => {
+      attachDragSafeClick(btn, () => {
         const num = parseInt(btn.dataset.num, 10);
         placeNumber(num);
       });
@@ -1065,9 +1071,9 @@
       });
     }
 
-    if (btnReset) btnReset.addEventListener('click', () => resetCurrentGame(true));
-    btnNewGame.addEventListener('click', () => startNewGame(true));
-    btnPlayAgain.addEventListener('click', () => startNewGame(false));
+    if (btnReset) attachDragSafeClick(btnReset, () => resetCurrentGame(true));
+    attachDragSafeClick(btnNewGame, () => startNewGame(true));
+    attachDragSafeClick(btnPlayAgain, () => startNewGame(false));
 
     // Pause timer on tab switch
     document.addEventListener('visibilitychange', () => {

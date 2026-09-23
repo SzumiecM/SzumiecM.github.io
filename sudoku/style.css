@@ -119,8 +119,10 @@ header {
   transition: opacity 0.2s ease;
 }
 
-.brand:hover {
-  opacity: 0.9;
+@media (hover: hover) and (pointer: fine) {
+  .brand:hover {
+    opacity: 0.9;
+  }
 }
 
 .brand-icon {
@@ -176,11 +178,10 @@ header {
   align-items: center;
   gap: 0.35rem;
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.action-text-btn:hover {
-  background: rgba(99, 102, 241, 0.25);
-  border-color: rgba(99, 102, 241, 0.5);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
 }
 
 .action-text-btn svg {
@@ -194,10 +195,16 @@ header {
   color: var(--text-sub);
 }
 
-.action-text-btn.btn-reset:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--border-light);
-  color: var(--text-main);
+@media (hover: hover) and (pointer: fine) {
+  .action-text-btn:hover {
+    background: rgba(99, 102, 241, 0.25);
+    border-color: rgba(99, 102, 241, 0.5);
+  }
+  .action-text-btn.btn-reset:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--border-light);
+    color: var(--text-main);
+  }
 }
 
 .btn-text-short {
@@ -524,10 +531,12 @@ header {
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.tool-btn:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-main);
-  border-color: var(--border-light);
+@media (hover: hover) and (pointer: fine) {
+  .tool-btn:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-main);
+    border-color: var(--border-light);
+  }
 }
 
 .tool-btn.active {
@@ -581,12 +590,16 @@ header {
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
 }
 
-.num-btn:hover {
-  background: var(--bg-card-hover);
-  border-color: var(--border-light);
-  transform: translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .num-btn:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-light);
+    transform: translateY(-2px);
+  }
 }
 
 .num-btn:active {
@@ -649,8 +662,10 @@ header {
   }
 }
 
-.shortcuts-hint:hover {
-  opacity: 0.9;
+@media (hover: hover) and (pointer: fine) {
+  .shortcuts-hint:hover {
+    opacity: 0.9;
+  }
 }
 
 .hint-group {
@@ -875,8 +890,10 @@ header {
   box-shadow: 0 4px 14px var(--accent-glow);
 }
 
-.victory-btn:hover {
-  background: var(--accent-hover);
+@media (hover: hover) and (pointer: fine) {
+  .victory-btn:hover {
+    background: var(--accent-hover);
+  }
 }
 
 /* Accessibility & Focus Outline */
