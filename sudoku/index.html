@@ -91,27 +91,11 @@
       <button class="diff-btn" data-diff="expert" role="tab">Expert</button>
     </div>
 
-    <!-- Assist / Guide Mode Bar (Centered in middle screen, spacious touch targets) -->
-    <div class="assist-bar">
-      <div class="assist-segmented-wrap" id="assist-control" role="radiogroup" aria-label="Highlight and assist mode">
-        <button type="button" class="assist-seg-btn" data-level="0" role="radio" aria-checked="false" aria-label="Level 0: Clean">
-          <span class="seg-num">0</span>
-          <span class="seg-label">Clean</span>
-        </button>
-        <button type="button" class="assist-seg-btn" data-level="1" role="radio" aria-checked="false" aria-label="Level 1: Warn">
-          <span class="seg-num">1</span>
-          <span class="seg-label">Warn</span>
-        </button>
-        <button type="button" class="assist-seg-btn" data-level="2" role="radio" aria-checked="false" aria-label="Level 2: Guide">
-          <span class="seg-num">2</span>
-          <span class="seg-label">Guide</span>
-        </button>
-
-        <div class="assist-bubble" id="assist-bubble" role="tooltip" aria-live="polite">
-          <div class="bubble-title" id="bubble-title">Level 2: Full Guide</div>
-          <div class="bubble-desc" id="bubble-desc">Same-number & row/col highlights + collision warnings</div>
-        </div>
-      </div>
+    <!-- Assist / Guide Mode Bar -->
+    <div class="assist-bar" id="assist-control" role="radiogroup" aria-label="Highlight and assist mode">
+      <button type="button" class="assist-btn" data-level="0" role="radio" aria-checked="false" aria-label="Level 0: Clean">Clean</button>
+      <button type="button" class="assist-btn" data-level="1" role="radio" aria-checked="false" aria-label="Level 1: Warn">Warn</button>
+      <button type="button" class="assist-btn" data-level="2" role="radio" aria-checked="false" aria-label="Level 2: Guide">Guide</button>
     </div>
 
     <!-- 9x9 Sudoku Board Grid -->
@@ -188,7 +172,7 @@
           var lvl = (assist !== null && ['0', '1', '2'].indexOf(assist) !== -1) ? assist : '2';
           var wrap = document.getElementById('assist-control');
           if (wrap) wrap.dataset.level = lvl;
-          var aBtn = document.querySelector('.assist-seg-btn[data-level="' + lvl + '"]');
+          var aBtn = document.querySelector('.assist-btn[data-level="' + lvl + '"]');
           if (aBtn) {
             aBtn.classList.add('active');
             aBtn.setAttribute('aria-checked', 'true');
