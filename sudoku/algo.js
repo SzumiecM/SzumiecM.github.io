@@ -416,48 +416,65 @@ function generatePuzzle(difficulty = 'medium') {
  * @param {Uint8Array|Array} board - 81-cell board
  * @returns {Set<number>} Set of conflicting cell indices
  */
+// Pre-computed 27 groups (9 rows, 9 columns, 9 boxes) for zero-allocation conflict detection
+const SUDOKU_GROUPS = (function () {
+  const groups = [];
+  // 9 rows
+  for (let r = 0; r < 9; r++) {
+    const row = new Uint8Array(9);
+    for (let c = 0; c < 9; c++) row[c] = r * 9 + c;
+    groups.push(row);
+  }
+  // 9 columns
+  for (let c = 0; c < 9; c++) {
+    const col = new Uint8Array(9);
+    for (let r = 0; r < 9; r++) col[r] = r * 9 + c;
+    groups.push(col);
+  }
+  // 9 boxes
+  for (let br = 0; br < 3; br++) {
+    for (let bc = 0; bc < 3; bc++) {
+      const box = new Uint8Array(9);
+      let idx = 0;
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          box[idx++] = (br * 3 + r) * 9 + (bc * 3 + c);
+        }
+      }
+      groups.push(box);
+    }
+  }
+  return groups;
+})();
+
+const SEEN_LOOKUP = new Int8Array(10);
+
+/**
+ * Identify all cell indices currently violating Sudoku rules.
+ * An index is in conflict if its value duplicates another cell in the same row, col, or box.
+ * High-performance zero-allocation scan.
+ * @param {Uint8Array|Array} board - 81-cell board
+ * @returns {Set<number>} Set of conflicting cell indices
+ */
 function findConflicts(board) {
   const conflicts = new Set();
 
-  function checkGroup(indices) {
-    const seen = new Map();
-    for (const idx of indices) {
-      const val = board[idx];
+  for (let g = 0; g < 27; g++) {
+    const group = SUDOKU_GROUPS[g];
+    SEEN_LOOKUP.fill(-1);
+
+    for (let i = 0; i < 9; i++) {
+      const cellIdx = group[i];
+      const val = board[cellIdx];
       if (val !== 0) {
-        if (seen.has(val)) {
-          conflicts.add(idx);
-          conflicts.add(seen.get(val));
+        const prevIdx = SEEN_LOOKUP[val];
+        if (prevIdx !== -1) {
+          conflicts.add(cellIdx);
+          conflicts.add(prevIdx);
         } else {
-          seen.set(val, idx);
+          SEEN_LOOKUP[val] = cellIdx;
         }
       }
-    }
-  }
-
-  // Check 9 rows
-  for (let r = 0; r < 9; r++) {
-    const row = [];
-    for (let c = 0; c < 9; c++) row.push(r * 9 + c);
-    checkGroup(row);
-  }
-
-  // Check 9 columns
-  for (let c = 0; c < 9; c++) {
-    const col = [];
-    for (let r = 0; r < 9; r++) col.push(r * 9 + c);
-    checkGroup(col);
-  }
-
-  // Check 9 boxes
-  for (let br = 0; br < 3; br++) {
-    for (let bc = 0; bc < 3; bc++) {
-      const box = [];
-      for (let r = 0; r < 3; r++) {
-        for (let c = 0; c < 3; c++) {
-          box.push((br * 3 + r) * 9 + (bc * 3 + c));
-        }
-      }
-      checkGroup(box);
     }
   }
 

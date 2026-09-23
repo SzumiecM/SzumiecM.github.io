@@ -62,6 +62,10 @@
   const assistBubble = document.getElementById('assist-bubble');
   const bubbleTitle = document.getElementById('bubble-title');
   const bubbleDesc = document.getElementById('bubble-desc');
+  const cellRefs = new Array(81);
+  let activeHighlightIndices = [];
+  let currentSelectedIdx = null;
+  let activeConflictIndices = new Set();
 
   // Assist Level: 0 = Pure/Clean, 1 = Errors Only, 2 = Full Guide
   const ASSIST_STORAGE_KEY = 'sudoku_assist_level_v1';
@@ -207,9 +211,11 @@
     }
   }
 
-  // --- Grid Construction ---
+  // --- Grid Construction (Atomic Fragment + Reference Pre-Caching) ---
   function createGridCells() {
     gridEl.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+
     for (let i = 0; i < 81; i++) {
       const cell = document.createElement('div');
       cell.className = 'cell';
@@ -221,21 +227,32 @@
       // Internal container for 3x3 pencil notes
       const notesGrid = document.createElement('div');
       notesGrid.className = 'notes-grid';
+      const noteItems = new Array(9);
       for (let n = 1; n <= 9; n++) {
         const noteItem = document.createElement('div');
         noteItem.className = 'note-item';
         noteItem.dataset.note = n;
         notesGrid.appendChild(noteItem);
+        noteItems[n - 1] = noteItem;
       }
       cell.appendChild(notesGrid);
 
-      // Main value display container (positioned absolute + flex centered)
+      // Main value display container
       const valSpan = document.createElement('span');
       valSpan.className = 'cell-val';
       cell.appendChild(valSpan);
 
-      gridEl.appendChild(cell);
+      fragment.appendChild(cell);
+
+      cellRefs[i] = {
+        el: cell,
+        valSpan,
+        notesGrid,
+        noteItems
+      };
     }
+
+    gridEl.appendChild(fragment);
   }
 
   // --- Setup Rotary Dial Items ---
@@ -347,86 +364,82 @@
     }
   }
 
-  // --- Board Rendering ---
+  // --- Board Rendering (High Performance Pre-Cached References) ---
   function renderFullBoard() {
     const conflicts = SudokuAlgo.findConflicts(board);
-    const cells = gridEl.children;
 
     for (let i = 0; i < 81; i++) {
-      const cell = cells[i];
+      const ref = cellRefs[i];
       const val = board[i];
       const isInitial = puzzle[i] !== 0;
       const isUserFilled = !isInitial && val !== 0;
-      const valSpan = cell.querySelector('.cell-val');
-      const notesGrid = cell.querySelector('.notes-grid');
 
-      cell.className = 'cell';
+      ref.el.className = 'cell';
       if (isInitial) {
-        cell.classList.add('initial');
+        ref.el.classList.add('initial');
       } else if (isUserFilled) {
-        cell.classList.add('user-filled');
+        ref.el.classList.add('user-filled');
       }
 
-      if (assistLevel > 0 && conflicts.has(i)) cell.classList.add('conflict');
+      if (assistLevel > 0 && conflicts.has(i)) ref.el.classList.add('conflict');
 
       if (val !== 0) {
-        valSpan.textContent = val;
-        valSpan.style.display = 'flex';
-        notesGrid.style.display = 'none';
+        ref.valSpan.textContent = val;
+        ref.valSpan.style.display = 'flex';
+        ref.notesGrid.style.display = 'none';
       } else {
-        valSpan.textContent = '';
-        valSpan.style.display = 'none';
-        notesGrid.style.display = 'grid';
+        ref.valSpan.textContent = '';
+        ref.valSpan.style.display = 'none';
+        ref.notesGrid.style.display = 'grid';
 
         const mask = notes[i];
-        const noteItems = notesGrid.children;
         for (let n = 1; n <= 9; n++) {
+          const item = ref.noteItems[n - 1];
           if (mask & (1 << n)) {
-            noteItems[n - 1].textContent = n;
-            noteItems[n - 1].classList.add('active');
+            item.textContent = n;
+            item.classList.add('active');
           } else {
-            noteItems[n - 1].textContent = '';
-            noteItems[n - 1].classList.remove('active');
+            item.textContent = '';
+            item.classList.remove('active');
           }
         }
       }
     }
 
+    activeConflictIndices = conflicts;
     applySelectionHighlights();
   }
 
   function renderSingleCell(idx) {
-    const cell = gridEl.children[idx];
-    if (!cell) return;
+    const ref = cellRefs[idx];
+    if (!ref) return;
 
     const val = board[idx];
     const isInitial = puzzle[idx] !== 0;
     const isUserFilled = !isInitial && val !== 0;
-    const valSpan = cell.querySelector('.cell-val');
-    const notesGrid = cell.querySelector('.notes-grid');
 
-    cell.classList.remove('user-filled', 'initial');
-    if (isInitial) cell.classList.add('initial');
-    else if (isUserFilled) cell.classList.add('user-filled');
+    ref.el.classList.remove('user-filled', 'initial');
+    if (isInitial) ref.el.classList.add('initial');
+    else if (isUserFilled) ref.el.classList.add('user-filled');
 
     if (val !== 0) {
-      valSpan.textContent = val;
-      valSpan.style.display = 'flex';
-      notesGrid.style.display = 'none';
+      ref.valSpan.textContent = val;
+      ref.valSpan.style.display = 'flex';
+      ref.notesGrid.style.display = 'none';
     } else {
-      valSpan.textContent = '';
-      valSpan.style.display = 'none';
-      notesGrid.style.display = 'grid';
+      ref.valSpan.textContent = '';
+      ref.valSpan.style.display = 'none';
+      ref.notesGrid.style.display = 'grid';
 
       const mask = notes[idx];
-      const noteItems = notesGrid.children;
       for (let n = 1; n <= 9; n++) {
+        const item = ref.noteItems[n - 1];
         if (mask & (1 << n)) {
-          noteItems[n - 1].textContent = n;
-          noteItems[n - 1].classList.add('active');
+          item.textContent = n;
+          item.classList.add('active');
         } else {
-          noteItems[n - 1].textContent = '';
-          noteItems[n - 1].classList.remove('active');
+          item.textContent = '';
+          item.classList.remove('active');
         }
       }
     }
@@ -437,25 +450,31 @@
   }
 
   function updateConflictClasses() {
-    const cells = gridEl.children;
     if (assistLevel === 0) {
-      for (let i = 0; i < 81; i++) {
-        cells[i].classList.remove('conflict');
+      if (activeConflictIndices.size > 0) {
+        for (const idx of activeConflictIndices) {
+          cellRefs[idx].el.classList.remove('conflict');
+        }
+        activeConflictIndices = new Set();
       }
       return;
     }
 
     const conflicts = SudokuAlgo.findConflicts(board);
-    for (let i = 0; i < 81; i++) {
-      if (conflicts.has(i)) {
-        cells[i].classList.add('conflict');
-      } else {
-        cells[i].classList.remove('conflict');
+    for (const idx of activeConflictIndices) {
+      if (!conflicts.has(idx)) {
+        cellRefs[idx].el.classList.remove('conflict');
       }
     }
+    for (const idx of conflicts) {
+      if (!activeConflictIndices.has(idx)) {
+        cellRefs[idx].el.classList.add('conflict');
+      }
+    }
+    activeConflictIndices = conflicts;
   }
 
-  // --- Selection & Crosshair Highlights ---
+  // --- Selection & Crosshair Highlights (Differential Fast-Path) ---
   function selectCell(idx) {
     if (idx < 0 || idx >= 81) return;
     selectedIdx = idx;
@@ -463,39 +482,65 @@
   }
 
   function applySelectionHighlights() {
-    const cells = gridEl.children;
     if (selectedIdx === null) {
-      for (let i = 0; i < 81; i++) {
-        cells[i].classList.remove('selected', 'related', 'same-number');
+      if (currentSelectedIdx !== null && cellRefs[currentSelectedIdx]) {
+        cellRefs[currentSelectedIdx].el.classList.remove('selected');
+        currentSelectedIdx = null;
       }
+      for (let i = 0; i < activeHighlightIndices.length; i++) {
+        const ref = cellRefs[activeHighlightIndices[i]];
+        if (ref) ref.el.classList.remove('related', 'same-number');
+      }
+      activeHighlightIndices = [];
       return;
     }
 
-    const selRow = Math.floor(selectedIdx / 9);
-    const selCol = selectedIdx % 9;
-    const selBox = Math.floor(selRow / 3) * 3 + Math.floor(selCol / 3);
-    const selVal = board[selectedIdx];
+    // Toggle selected class only on the changed cell
+    if (currentSelectedIdx !== selectedIdx) {
+      if (currentSelectedIdx !== null && cellRefs[currentSelectedIdx]) {
+        cellRefs[currentSelectedIdx].el.classList.remove('selected');
+      }
+      if (cellRefs[selectedIdx]) {
+        cellRefs[selectedIdx].el.classList.add('selected');
+      }
+      currentSelectedIdx = selectedIdx;
+    }
 
-    for (let i = 0; i < 81; i++) {
-      const cell = cells[i];
-      const r = Math.floor(i / 9);
-      const c = i % 9;
-      const b = Math.floor(r / 3) * 3 + Math.floor(c / 3);
-      const val = board[i];
+    // Clear old related & same-number highlights
+    for (let i = 0; i < activeHighlightIndices.length; i++) {
+      const idx = activeHighlightIndices[i];
+      if (idx !== selectedIdx) {
+        const ref = cellRefs[idx];
+        if (ref) ref.el.classList.remove('related', 'same-number');
+      }
+    }
 
-      cell.classList.remove('selected', 'related', 'same-number');
+    const newHighlights = [];
+    if (assistLevel === 2) {
+      const selRow = Math.floor(selectedIdx / 9);
+      const selCol = selectedIdx % 9;
+      const selBox = Math.floor(selRow / 3) * 3 + Math.floor(selCol / 3);
+      const selVal = board[selectedIdx];
 
-      if (i === selectedIdx) {
-        cell.classList.add('selected');
-      } else if (assistLevel === 2) {
-        if (r === selRow || c === selCol || b === selBox) {
-          cell.classList.add('related');
-        }
-        if (selVal !== 0 && val === selVal) {
-          cell.classList.add('same-number');
+      for (let i = 0; i < 81; i++) {
+        if (i === selectedIdx) continue;
+        const r = Math.floor(i / 9);
+        const c = i % 9;
+        const b = Math.floor(r / 3) * 3 + Math.floor(c / 3);
+        const val = board[i];
+
+        const isRelated = (r === selRow || c === selCol || b === selBox);
+        const isSameNum = (selVal !== 0 && val === selVal);
+
+        if (isRelated || isSameNum) {
+          const el = cellRefs[i].el;
+          if (isRelated) el.classList.add('related');
+          if (isSameNum) el.classList.add('same-number');
+          newHighlights.push(i);
         }
       }
     }
+    activeHighlightIndices = newHighlights;
   }
 
   // --- Input Handling: Digits & Notes ---
@@ -1092,10 +1137,7 @@
     });
   }
 
-  // Run on DOM Ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  // Immediate synchronous execution to eliminate Flash of Incorrect State / CLS on reload
+  init();
 })();
+
