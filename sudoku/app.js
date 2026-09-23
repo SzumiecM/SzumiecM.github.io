@@ -1,7 +1,7 @@
 /**
  * Sudoku UI & Interaction Controller - Zero Dependencies
- * Manages grid rendering, keyboard navigation, rotary dial touch gestures,
- * pencil notes, undo history, per-difficulty game state persistence, and game progression.
+ * Manages grid rendering, keyboard navigation (step, 3x3 jump, edge jump, undo, redo),
+ * rotary dial touch gestures, pencil notes, per-difficulty game persistence, and game progression.
  */
 
 (function () {
@@ -17,6 +17,7 @@
   let selectedIdx = null;
   let pencilMode = false;
   let history = [];
+  let redoStack = [];
   let isCompleted = false;
 
   // Timer state
@@ -72,6 +73,7 @@
         notes: Array.from(notes),
         timerSeconds,
         history,
+        redoStack,
         isCompleted
       };
       localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
@@ -92,6 +94,7 @@
         notes = Uint16Array.from(s.notes);
         timerSeconds = s.timerSeconds || 0;
         history = s.history || [];
+        redoStack = s.redoStack || [];
         isCompleted = !!s.isCompleted;
         return true;
       }
@@ -101,28 +104,18 @@
     return false;
   }
 
-  function clearSession(diff) {
-    try {
-      const sessions = getStoredSessions();
-      delete sessions[diff];
-      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
-    } catch (e) {}
-  }
-
   // --- Initialization ---
   function init() {
     createGridCells();
     setupRotaryDial();
     bindEvents();
 
-    // Restore last active difficulty or default to medium
     const savedDiff = localStorage.getItem(DIFFICULTY_STORAGE_KEY);
     if (savedDiff && ['easy', 'medium', 'hard', 'expert'].includes(savedDiff)) {
       difficulty = savedDiff;
     }
     updateDiffButtons();
 
-    // Check if an existing session exists for this difficulty
     if (loadStoredSession(difficulty)) {
       renderFullBoard();
       updateKeypadCounts();
@@ -167,7 +160,7 @@
     }
   }
 
-  // --- Setup Rotary Dial Items (Positioned radially) ---
+  // --- Setup Rotary Dial Items ---
   function setupRotaryDial() {
     const radius = 78;
     const items = rotaryWheel.querySelectorAll('.rotary-item');
@@ -198,10 +191,10 @@
 
     isCompleted = false;
     history = [];
+    redoStack = [];
     selectedIdx = null;
     victoryModal.classList.remove('active');
 
-    // Generate fresh puzzle using algo.js
     const generated = SudokuAlgo.generatePuzzle(difficulty);
     puzzle = generated.puzzle;
     solution = generated.solution;
@@ -221,18 +214,16 @@
   function switchDifficulty(newDiff) {
     if (newDiff === difficulty) return;
 
-    // 1. Save current game before switching
     saveCurrentSession();
     stopTimer();
 
-    // 2. Switch difficulty
     difficulty = newDiff;
     localStorage.setItem(DIFFICULTY_STORAGE_KEY, difficulty);
     updateDiffButtons();
     selectedIdx = null;
+    redoStack = [];
     victoryModal.classList.remove('active');
 
-    // 3. Try to resume existing game for the new difficulty
     if (loadStoredSession(difficulty)) {
       renderFullBoard();
       updateKeypadCounts();
@@ -242,7 +233,6 @@
       let firstEmpty = board.findIndex(v => v === 0);
       selectCell(firstEmpty !== -1 ? firstEmpty : 0);
     } else {
-      // Otherwise, generate fresh game
       startNewGame(false);
     }
   }
@@ -260,7 +250,6 @@
       const valSpan = cell.querySelector('.cell-val');
       const notesGrid = cell.querySelector('.notes-grid');
 
-      // Reset state classes
       cell.className = 'cell';
       if (isInitial) {
         cell.classList.add('initial');
@@ -279,7 +268,6 @@
         valSpan.style.display = 'none';
         notesGrid.style.display = 'grid';
 
-        // Render pencil notes
         const mask = notes[i];
         const noteItems = notesGrid.children;
         for (let n = 1; n <= 9; n++) {
@@ -396,7 +384,7 @@
   // --- Input Handling: Digits & Notes ---
   function placeNumber(num) {
     if (selectedIdx === null || isCompleted) return;
-    if (puzzle[selectedIdx] !== 0) return; // Clues cannot be altered
+    if (puzzle[selectedIdx] !== 0) return;
 
     const prevVal = board[selectedIdx];
     const prevNotes = notes[selectedIdx];
@@ -406,6 +394,7 @@
         if (prevNotes !== 0) {
           notes[selectedIdx] = 0;
           history.push({ type: 'notes', index: selectedIdx, prevVal, newVal: prevVal, prevNotes, newNotes: 0 });
+          redoStack = [];
           renderSingleCell(selectedIdx);
           saveCurrentSession();
         }
@@ -414,6 +403,7 @@
         notes[selectedIdx] = newNotes;
         board[selectedIdx] = 0;
         history.push({ type: 'notes', index: selectedIdx, prevVal, newVal: 0, prevNotes, newNotes });
+        redoStack = [];
         renderSingleCell(selectedIdx);
         saveCurrentSession();
       }
@@ -423,6 +413,7 @@
       board[selectedIdx] = num;
       notes[selectedIdx] = 0;
       history.push({ type: 'set', index: selectedIdx, prevVal, newVal: num, prevNotes, newNotes: 0 });
+      redoStack = [];
       renderSingleCell(selectedIdx);
       saveCurrentSession();
 
@@ -442,6 +433,7 @@
     board[selectedIdx] = 0;
     notes[selectedIdx] = 0;
     history.push({ type: 'clear', index: selectedIdx, prevVal, newVal: 0, prevNotes, newNotes: 0 });
+    redoStack = [];
     renderSingleCell(selectedIdx);
     saveCurrentSession();
   }
@@ -451,9 +443,22 @@
     const action = history.pop();
     board[action.index] = action.prevVal;
     notes[action.index] = action.prevNotes;
+    redoStack.push(action);
     selectedIdx = action.index;
     renderSingleCell(action.index);
     saveCurrentSession();
+  }
+
+  function redoLastMove() {
+    if (redoStack.length === 0 || isCompleted) return;
+    const action = redoStack.pop();
+    board[action.index] = action.newVal;
+    notes[action.index] = action.newNotes;
+    history.push(action);
+    selectedIdx = action.index;
+    renderSingleCell(action.index);
+    saveCurrentSession();
+    checkVictoryCondition();
   }
 
   // --- Keypad Remaining Counts ---
@@ -503,7 +508,6 @@
     timerInterval = setInterval(() => {
       timerSeconds++;
       updateTimerDisplay();
-      // Periodically save timer every 5 seconds
       if (timerSeconds % 5 === 0) saveCurrentSession();
     }, 1000);
   }
@@ -534,7 +538,7 @@
     });
   }
 
-  // --- Keyboard Navigation (Arrows, WASD, HJKL, 1-9, Notes, Undo) ---
+  // --- Keyboard Navigation (Custom Step, 3x3 Jump, Edge Jump, Undo, Redo) ---
   function handleKeyDown(e) {
     if (victoryModal.classList.contains('active')) return;
     if (isRotaryOpen) {
@@ -542,68 +546,84 @@
       return;
     }
 
+    const isCtrl = e.ctrlKey || e.metaKey;
+    const isShift = e.shiftKey;
     const key = e.key;
 
-    // Cell Navigation
+    // --- Undo (Ctrl+Z or U) ---
+    if ((isCtrl && !isShift && (key === 'z' || key === 'Z')) || (!isCtrl && (key === 'u' || key === 'U'))) {
+      undoLastMove();
+      e.preventDefault();
+      return;
+    }
+
+    // --- Redo (Ctrl+Y or Ctrl+Shift+Z) ---
+    if ((isCtrl && (key === 'y' || key === 'Y')) || (isCtrl && isShift && (key === 'z' || key === 'Z'))) {
+      redoLastMove();
+      e.preventDefault();
+      return;
+    }
+
+    // --- Grid Navigation ---
     if (selectedIdx !== null) {
       let r = Math.floor(selectedIdx / 9);
       let c = selectedIdx % 9;
+      let handled = false;
 
-      if (key === 'ArrowUp' || key === 'w' || key === 'W' || key === 'k') {
-        r = (r - 1 + 9) % 9;
-        selectCell(r * 9 + c);
-        e.preventDefault();
-        return;
-      }
-      if (key === 'ArrowDown' || key === 's' || key === 'S' || key === 'j') {
-        r = (r + 1) % 9;
-        selectCell(r * 9 + c);
-        e.preventDefault();
-        return;
-      }
-      if (key === 'ArrowLeft' || key === 'a' || key === 'A' || key === 'h') {
-        c = (c - 1 + 9) % 9;
-        selectCell(r * 9 + c);
-        e.preventDefault();
-        return;
-      }
-      if (key === 'ArrowRight' || key === 'd' || key === 'D' || key === 'l') {
-        c = (c + 1) % 9;
-        selectCell(r * 9 + c);
-        e.preventDefault();
-        return;
+      const isUp = key === 'ArrowUp' || (!isCtrl && (key === 'w' || key === 'W' || key === 'k'));
+      const isDown = key === 'ArrowDown' || (!isCtrl && (key === 's' || key === 'S' || key === 'j'));
+      const isLeft = key === 'ArrowLeft' || (!isCtrl && (key === 'a' || key === 'A' || key === 'h'));
+      const isRight = key === 'ArrowRight' || (!isCtrl && (key === 'd' || key === 'D' || key === 'l'));
+
+      if (isUp || isDown || isLeft || isRight) {
+        if (isCtrl && isShift) {
+          // Jump all the way to the edge
+          if (isUp) r = 0;
+          if (isDown) r = 8;
+          if (isLeft) c = 0;
+          if (isRight) c = 8;
+          handled = true;
+        } else if (isCtrl) {
+          // Jump to adjacent 3x3 square (same relative cell position)
+          if (isUp) r = (r - 3 + 9) % 9;
+          if (isDown) r = (r + 3) % 9;
+          if (isLeft) c = (c - 3 + 9) % 9;
+          if (isRight) c = (c + 3) % 9;
+          handled = true;
+        } else {
+          // Single cell step
+          if (isUp) r = (r - 1 + 9) % 9;
+          if (isDown) r = (r + 1) % 9;
+          if (isLeft) c = (c - 1 + 9) % 9;
+          if (isRight) c = (c + 1) % 9;
+          handled = true;
+        }
+
+        if (handled) {
+          selectCell(r * 9 + c);
+          e.preventDefault();
+          return;
+        }
       }
     }
 
     // Number Inputs
-    if (/^[1-9]$/.test(key)) {
+    if (/^[1-9]$/.test(key) && !isCtrl) {
       placeNumber(parseInt(key, 10));
       e.preventDefault();
       return;
     }
 
     // Erase
-    if (key === 'Backspace' || key === 'Delete' || key === '0') {
+    if ((key === 'Backspace' || key === 'Delete' || key === '0') && !isCtrl) {
       eraseSelectedCell();
       e.preventDefault();
       return;
     }
 
     // Notes Toggle
-    if (key === 'n' || key === 'N' || key === 'p' || key === 'P') {
+    if ((key === 'n' || key === 'N' || key === 'p' || key === 'P') && !isCtrl) {
       togglePencilMode();
-      e.preventDefault();
-      return;
-    }
-
-    // Undo
-    if ((e.ctrlKey || e.metaKey) && (key === 'z' || key === 'Z')) {
-      undoLastMove();
-      e.preventDefault();
-      return;
-    }
-    if (key === 'u' || key === 'U') {
-      undoLastMove();
       e.preventDefault();
       return;
     }

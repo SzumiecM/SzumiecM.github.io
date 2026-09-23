@@ -84,7 +84,7 @@
       </div>
 
       <div class="status-right">
-        <!-- Optional status notes / indicators -->
+        <!-- Status indicator placeholder -->
       </div>
     </div>
 
@@ -102,7 +102,7 @@
           <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
         </svg>
         <span>Undo</span>
-        <span class="key-hint">U</span>
+        <span class="key-hint">Ctrl+Z</span>
       </button>
 
       <button id="btn-erase" class="tool-btn" aria-label="Erase cell">
@@ -138,6 +138,15 @@
       <button class="num-btn" data-num="7">7<span class="count-badge"></span></button>
       <button class="num-btn" data-num="8">8<span class="count-badge"></span></button>
       <button class="num-btn" data-num="9">9<span class="count-badge"></span></button>
+    </div>
+
+    <!-- Desktop Subtle Shortcuts Hint (Greyed out in background, strictly for PC) -->
+    <div class="shortcuts-hint" aria-label="Keyboard Shortcuts">
+      <span class="hint-group"><kbd>Ctrl</kbd> + <kbd>↑↓←→</kbd> <span class="hint-label">Jump 3×3</span></span>
+      <span class="hint-dot">•</span>
+      <span class="hint-group"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>↑↓←→</kbd> <span class="hint-label">Jump to edge</span></span>
+      <span class="hint-dot">•</span>
+      <span class="hint-group"><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Y</kbd> <span class="hint-label">Undo / Redo</span></span>
     </div>
 
   </div>
