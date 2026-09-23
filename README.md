@@ -41,6 +41,7 @@
 | **📻 Flux Radio** | Live internet radio streamer accessing 30,000+ stations worldwide with tag filtering and anonymous playback. | `Radio-Browser API` · `CSP Security` · `Anon Mode` | [Launch App →](https://szumiecm.github.io/flux/) |
 | **🔍 Diff Tool** | Side-by-side and unified code diff comparator with live line statistics for additions and removals. | `Visual Diff Engine` · `Instant Render` · `Stats Bar` | [Launch Tool →](https://szumiecm.github.io/diff/) |
 | **⏳ Kairos** | Minimalist focus timer & timebox engine with procedural ambient sound synthesis and local statistics. | `Web Audio Synthesis` · `Procedural Noise` · `SVG Ring` | [Launch App →](https://szumiecm.github.io/kairos/) |
+| **🧩 Sudoku** | Zero-dependency client-side Sudoku engine with guaranteed solvability, rotary mobile touch dial, and keyboard shortcuts. | `Isomorphic Generation` · `MRV Bitmask Solver` · `Rotary Touch Dial` | [Launch App →](https://szumiecm.github.io/sudoku/) |
 
 ---
 
