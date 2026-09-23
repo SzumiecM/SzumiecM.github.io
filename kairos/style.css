@@ -1,7 +1,7 @@
 :root {
   --bg-dark: #080a10;
-  --bg-card: rgba(16, 20, 32, 0.7);
-  --bg-card-hover: rgba(24, 30, 48, 0.8);
+  --bg-card: rgba(16, 20, 32, 0.85);
+  --bg-card-hover: rgba(24, 30, 48, 0.95);
   --border-color: rgba(255, 255, 255, 0.08);
 
   --text-main: #f8fafc;
@@ -50,12 +50,17 @@ a:focus-visible,
   outline-offset: 2px;
 }
 
+/* Background Ambient Canvas - 100% Static & Zero-GPU Overhead */
 .bg-canvas {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
+  background:
+    radial-gradient(circle at 20% -5%, var(--accent-current-glow) 0%, transparent 55%),
+    radial-gradient(circle at 85% 105%, rgba(99, 102, 241, 0.12) 0%, transparent 55%);
+  transition: background 0.8s ease;
 }
 
 .bg-grid {
@@ -67,46 +72,6 @@ a:focus-visible,
   background-size: 36px 36px;
   mask-image: radial-gradient(circle at 50% 40%, black 30%, transparent 80%);
   -webkit-mask-image: radial-gradient(circle at 50% 40%, black 30%, transparent 80%);
-}
-
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  opacity: 0.35;
-  transition: background 0.8s ease;
-  animation: floatOrb 20s ease-in-out infinite alternate;
-}
-
-.orb-1 {
-  top: -10%;
-  left: 20%;
-  width: 480px;
-  height: 480px;
-  background: radial-gradient(circle, var(--accent-current) 0%, transparent 70%);
-}
-
-.orb-2 {
-  bottom: -10%;
-  right: 20%;
-  width: 520px;
-  height: 520px;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, transparent 70%);
-  animation-delay: -6s;
-}
-
-@keyframes floatOrb {
-  0% {
-    transform: translate(0, 0) scale(1);
-  }
-
-  50% {
-    transform: translate(40px, -30px) scale(1.08);
-  }
-
-  100% {
-    transform: translate(-30px, 40px) scale(0.95);
-  }
 }
 
 .app-container {
@@ -176,7 +141,6 @@ header {
   border-radius: 16px;
   padding: 18px 22px;
   margin-bottom: 24px;
-  backdrop-filter: blur(16px);
 }
 
 .preset-header {
@@ -291,7 +255,6 @@ header {
   border-radius: 16px;
   padding: 20px;
   margin-bottom: 32px;
-  backdrop-filter: blur(16px);
 }
 
 .timeline-header {
@@ -543,7 +506,6 @@ header {
   border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 20px;
-  backdrop-filter: blur(16px);
   display: flex;
   align-items: center;
   gap: 16px;
