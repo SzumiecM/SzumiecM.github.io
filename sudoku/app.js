@@ -56,7 +56,7 @@
   const victoryTimeEl = document.getElementById('victory-time');
   const victoryDiffEl = document.getElementById('victory-diff');
   const btnPlayAgain = document.getElementById('btn-play-again');
-  const assistSlider = document.getElementById('assist-slider');
+  const assistSegButtons = document.querySelectorAll('.assist-seg-btn');
   const assistControl = document.getElementById('assist-control');
   const assistBubble = document.getElementById('assist-bubble');
   const bubbleTitle = document.getElementById('bubble-title');
@@ -84,8 +84,15 @@
 
   function setAssistLevel(level, showBubble = false) {
     assistLevel = Math.max(0, Math.min(2, level));
-    if (assistSlider) assistSlider.value = assistLevel;
     if (assistControl) assistControl.dataset.level = assistLevel;
+    if (assistSegButtons) {
+      assistSegButtons.forEach((btn) => {
+        const btnLvl = parseInt(btn.dataset.level, 10);
+        const isActive = btnLvl === assistLevel;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+      });
+    }
 
     if (showBubble && assistBubble) {
       const info = ASSIST_LEVEL_INFO[assistLevel];
@@ -93,6 +100,7 @@
       if (bubbleDesc) bubbleDesc.textContent = info.desc;
       assistBubble.classList.add('active');
       clearTimeout(bubbleFadeTimeout);
+      hideAssistBubble(1800);
     }
 
     try {
@@ -973,20 +981,62 @@
     });
 
     // Header & Modal New Game Buttons
-    // Assist Mode Range Slider Events
-    if (assistSlider) {
-      const onGrab = () => setAssistLevel(parseInt(assistSlider.value, 10), true);
-      const onRelease = () => hideAssistBubble(700);
-
-      assistSlider.addEventListener('input', () => {
-        setAssistLevel(parseInt(assistSlider.value, 10), true);
+    // Assist Mode Segmented Button Events
+    if (assistSegButtons && assistSegButtons.length > 0) {
+      assistSegButtons.forEach((btn) => {
+        const lvl = parseInt(btn.dataset.level, 10);
+        btn.addEventListener('click', () => {
+          setAssistLevel(lvl, true);
+        });
+        btn.addEventListener('mouseenter', () => {
+          const info = ASSIST_LEVEL_INFO[lvl];
+          if (bubbleTitle) bubbleTitle.textContent = info.title;
+          if (bubbleDesc) bubbleDesc.textContent = info.desc;
+          if (assistBubble) assistBubble.classList.add('active');
+        });
+        btn.addEventListener('mouseleave', () => {
+          hideAssistBubble(300);
+        });
       });
-      assistSlider.addEventListener('pointerdown', onGrab);
-      assistSlider.addEventListener('pointerup', onRelease);
-      assistSlider.addEventListener('touchstart', onGrab, { passive: true });
-      assistSlider.addEventListener('touchend', onRelease);
-      assistSlider.addEventListener('focus', onGrab);
-      assistSlider.addEventListener('blur', () => hideAssistBubble(200));
+
+      // Drag / slide gestures across the segmented buttons
+      if (assistControl) {
+        let isTouchingControl = false;
+
+        const handleTouchLevel = (e) => {
+          const touch = e.touches[0];
+          if (!touch) return;
+          const target = document.elementFromPoint(touch.clientX, touch.clientY);
+          const segBtn = target ? target.closest('.assist-seg-btn') : null;
+          if (segBtn) {
+            const lvl = parseInt(segBtn.dataset.level, 10);
+            if (lvl !== assistLevel) {
+              setAssistLevel(lvl, true);
+              if (navigator.vibrate) navigator.vibrate(10);
+            }
+          }
+        };
+
+        assistControl.addEventListener('touchstart', (e) => {
+          isTouchingControl = true;
+          handleTouchLevel(e);
+        }, { passive: true });
+
+        assistControl.addEventListener('touchmove', (e) => {
+          if (!isTouchingControl) return;
+          handleTouchLevel(e);
+        }, { passive: true });
+
+        assistControl.addEventListener('touchend', () => {
+          isTouchingControl = false;
+          hideAssistBubble(1500);
+        }, { passive: true });
+
+        assistControl.addEventListener('touchcancel', () => {
+          isTouchingControl = false;
+          hideAssistBubble(500);
+        }, { passive: true });
+      }
     }
 
     btnNewGame.addEventListener('click', () => startNewGame(true));

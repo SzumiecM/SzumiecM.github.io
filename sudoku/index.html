@@ -53,6 +53,15 @@
       </a>
 
       <div class="header-actions">
+        <div class="timer-box" aria-label="Timer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span id="timer-text">00:00</span>
+        </div>
+
         <button id="btn-new-game" class="action-text-btn" aria-label="New Game">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
             stroke-linejoin="round">
@@ -72,36 +81,25 @@
       <button class="diff-btn" data-diff="expert" role="tab">Expert</button>
     </div>
 
-    <!-- Status & Timer Bar -->
-    <div class="status-bar">
-      <div class="timer-box" aria-label="Timer">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-          stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-        <span id="timer-text">00:00</span>
-      </div>
+    <!-- Assist / Guide Mode Bar (Centered in middle screen, spacious touch targets) -->
+    <div class="assist-bar">
+      <div class="assist-segmented-wrap" id="assist-control" data-level="2" role="radiogroup" aria-label="Highlight and assist mode">
+        <button type="button" class="assist-seg-btn" data-level="0" role="radio" aria-checked="false" aria-label="Level 0: Clean">
+          <span class="seg-num">0</span>
+          <span class="seg-label">Clean</span>
+        </button>
+        <button type="button" class="assist-seg-btn" data-level="1" role="radio" aria-checked="false" aria-label="Level 1: Warn">
+          <span class="seg-num">1</span>
+          <span class="seg-label">Warn</span>
+        </button>
+        <button type="button" class="assist-seg-btn active" data-level="2" role="radio" aria-checked="true" aria-label="Level 2: Guide">
+          <span class="seg-num">2</span>
+          <span class="seg-label">Guide</span>
+        </button>
 
-      <div class="status-right">
-        <div class="assist-slider-wrap" id="assist-control" data-level="2" aria-label="Highlight and assist mode">
-          <svg id="assist-icon" class="assist-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
-            <circle cx="12" cy="12" r="3"></circle>
-          </svg>
-          <span class="assist-label">Guide</span>
-          <div class="assist-track-container">
-            <input type="range" id="assist-slider" class="assist-slider" min="0" max="2" step="1" value="2" aria-label="Assist Level: 0 clean, 1 errors only, 2 full highlights">
-            <div class="assist-ticks">
-              <span class="tick">0</span>
-              <span class="tick">1</span>
-              <span class="tick">2</span>
-            </div>
-          </div>
-          <div class="assist-bubble" id="assist-bubble" role="tooltip" aria-live="polite">
-            <div class="bubble-title" id="bubble-title">Level 2: Full Guide</div>
-            <div class="bubble-desc" id="bubble-desc">Same-number & row/col highlights + collision warnings</div>
-          </div>
+        <div class="assist-bubble" id="assist-bubble" role="tooltip" aria-live="polite">
+          <div class="bubble-title" id="bubble-title">Level 2: Full Guide</div>
+          <div class="bubble-desc" id="bubble-desc">Same-number & row/col highlights + collision warnings</div>
         </div>
       </div>
     </div>
