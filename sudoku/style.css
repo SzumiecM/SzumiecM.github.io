@@ -274,6 +274,204 @@ header {
   color: var(--accent-secondary);
 }
 
+/* Assist Mode Slider (0: Clean/Pure, 1: Errors Only, 2: Full Guide) */
+.status-right {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.assist-slider-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  padding: 0.28rem 0.65rem;
+  border-radius: 6px;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: border-color 0.2s ease;
+}
+
+.assist-slider-wrap:hover {
+  border-color: var(--border-light);
+}
+
+.assist-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.assist-slider-wrap[data-level="0"] .assist-icon {
+  color: var(--text-dim);
+  opacity: 0.5;
+}
+
+.assist-slider-wrap[data-level="1"] .assist-icon {
+  color: #f59e0b;
+  opacity: 0.9;
+}
+
+.assist-slider-wrap[data-level="2"] .assist-icon {
+  color: var(--accent-secondary);
+  opacity: 1;
+}
+
+.assist-label {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+}
+
+.assist-track-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.assist-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 52px;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  touch-action: none;
+}
+
+.assist-slider:focus {
+  outline: none;
+}
+
+.assist-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
+
+.assist-slider::-moz-range-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
+
+.assist-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: var(--accent-secondary);
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 0 8px var(--accent-glow);
+  cursor: grab;
+  transition: transform 0.12s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.assist-slider:active::-webkit-slider-thumb {
+  cursor: grabbing;
+  transform: scale(1.25);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.assist-slider::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent-secondary);
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 0 8px var(--accent-glow);
+  cursor: grab;
+  transition: transform 0.12s ease;
+}
+
+.assist-slider:active::-moz-range-thumb {
+  cursor: grabbing;
+  transform: scale(1.25);
+}
+
+.assist-slider-wrap[data-level="0"] .assist-slider::-webkit-slider-thumb {
+  background: #64748b;
+  box-shadow: none;
+}
+.assist-slider-wrap[data-level="1"] .assist-slider::-webkit-slider-thumb {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+.assist-slider-wrap[data-level="2"] .assist-slider::-webkit-slider-thumb {
+  background: var(--accent-secondary);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.assist-ticks {
+  width: 52px;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 2px;
+  margin-top: -2px;
+  pointer-events: none;
+}
+
+.assist-ticks .tick {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  color: var(--text-dim);
+  line-height: 1;
+  opacity: 0.6;
+}
+
+/* Floating Assist Tooltip Bubble (Visible only on grab/touch/slide) */
+.assist-bubble {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: rgba(16, 20, 36, 0.96);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7), 0 0 16px rgba(99, 102, 241, 0.2);
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  min-width: 180px;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px) scale(0.96);
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.assist-bubble.active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.assist-bubble .bubble-title {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 2px;
+}
+
+.assist-bubble .bubble-desc {
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  color: var(--text-sub);
+  line-height: 1.3;
+}
+
 /* Sudoku Board Wrapper */
 .board-wrapper {
   position: relative;
@@ -493,10 +691,17 @@ header {
 }
 
 .tool-btn .key-hint {
+  display: none;
   font-size: 0.65rem;
   color: var(--text-dim);
   font-family: var(--font-mono);
   font-weight: 400;
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 600px) {
+  .tool-btn .key-hint {
+    display: inline-block;
+  }
 }
 
 /* Number Keypad */

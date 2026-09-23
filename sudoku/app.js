@@ -56,6 +56,61 @@
   const victoryTimeEl = document.getElementById('victory-time');
   const victoryDiffEl = document.getElementById('victory-diff');
   const btnPlayAgain = document.getElementById('btn-play-again');
+  const assistSlider = document.getElementById('assist-slider');
+  const assistControl = document.getElementById('assist-control');
+  const assistBubble = document.getElementById('assist-bubble');
+  const bubbleTitle = document.getElementById('bubble-title');
+  const bubbleDesc = document.getElementById('bubble-desc');
+
+  // Assist Level: 0 = Pure/Clean, 1 = Errors Only, 2 = Full Guide
+  const ASSIST_STORAGE_KEY = 'sudoku_assist_level_v1';
+  let assistLevel = 2;
+  let bubbleFadeTimeout = null;
+
+  const ASSIST_LEVEL_INFO = [
+    {
+      title: 'Level 0: Clean (Hardcore)',
+      desc: 'No highlights, no collision warnings'
+    },
+    {
+      title: 'Level 1: Rule Collisions',
+      desc: 'Red highlight on duplicate digits'
+    },
+    {
+      title: 'Level 2: Full Guide',
+      desc: 'Same-number & row/col highlights + collision warnings'
+    }
+  ];
+
+  function setAssistLevel(level, showBubble = false) {
+    assistLevel = Math.max(0, Math.min(2, level));
+    if (assistSlider) assistSlider.value = assistLevel;
+    if (assistControl) assistControl.dataset.level = assistLevel;
+
+    if (showBubble && assistBubble) {
+      const info = ASSIST_LEVEL_INFO[assistLevel];
+      if (bubbleTitle) bubbleTitle.textContent = info.title;
+      if (bubbleDesc) bubbleDesc.textContent = info.desc;
+      assistBubble.classList.add('active');
+      clearTimeout(bubbleFadeTimeout);
+    }
+
+    try {
+      localStorage.setItem(ASSIST_STORAGE_KEY, assistLevel);
+    } catch (e) {
+      // quota
+    }
+
+    updateConflictClasses();
+    applySelectionHighlights();
+  }
+
+  function hideAssistBubble(delay = 650) {
+    clearTimeout(bubbleFadeTimeout);
+    bubbleFadeTimeout = setTimeout(() => {
+      if (assistBubble) assistBubble.classList.remove('active');
+    }, delay);
+  }
 
   // --- Session Storage Helpers ---
   function getStoredSessions() {
@@ -113,6 +168,15 @@
     createGridCells();
     setupRotaryDial();
     bindEvents();
+
+    const savedAssist = localStorage.getItem(ASSIST_STORAGE_KEY);
+    if (savedAssist !== null) {
+      const parsed = parseInt(savedAssist, 10);
+      if (!isNaN(parsed) && parsed >= 0 && parsed <= 2) {
+        assistLevel = parsed;
+      }
+    }
+    setAssistLevel(assistLevel, false);
 
     const savedDiff = localStorage.getItem(DIFFICULTY_STORAGE_KEY);
     if (savedDiff && ['easy', 'medium', 'hard', 'expert'].includes(savedDiff)) {
@@ -261,7 +325,7 @@
         cell.classList.add('user-filled');
       }
 
-      if (conflicts.has(i)) cell.classList.add('conflict');
+      if (assistLevel > 0 && conflicts.has(i)) cell.classList.add('conflict');
 
       if (val !== 0) {
         valSpan.textContent = val;
@@ -331,8 +395,15 @@
   }
 
   function updateConflictClasses() {
-    const conflicts = SudokuAlgo.findConflicts(board);
     const cells = gridEl.children;
+    if (assistLevel === 0) {
+      for (let i = 0; i < 81; i++) {
+        cells[i].classList.remove('conflict');
+      }
+      return;
+    }
+
+    const conflicts = SudokuAlgo.findConflicts(board);
     for (let i = 0; i < 81; i++) {
       if (conflicts.has(i)) {
         cells[i].classList.add('conflict');
@@ -374,7 +445,7 @@
 
       if (i === selectedIdx) {
         cell.classList.add('selected');
-      } else {
+      } else if (assistLevel === 2) {
         if (r === selRow || c === selCol || b === selBox) {
           cell.classList.add('related');
         }
@@ -889,6 +960,22 @@
     });
 
     // Header & Modal New Game Buttons
+    // Assist Mode Range Slider Events
+    if (assistSlider) {
+      const onGrab = () => setAssistLevel(parseInt(assistSlider.value, 10), true);
+      const onRelease = () => hideAssistBubble(700);
+
+      assistSlider.addEventListener('input', () => {
+        setAssistLevel(parseInt(assistSlider.value, 10), true);
+      });
+      assistSlider.addEventListener('pointerdown', onGrab);
+      assistSlider.addEventListener('pointerup', onRelease);
+      assistSlider.addEventListener('touchstart', onGrab, { passive: true });
+      assistSlider.addEventListener('touchend', onRelease);
+      assistSlider.addEventListener('focus', onGrab);
+      assistSlider.addEventListener('blur', () => hideAssistBubble(200));
+    }
+
     btnNewGame.addEventListener('click', () => startNewGame(true));
     btnPlayAgain.addEventListener('click', () => startNewGame(false));
 
