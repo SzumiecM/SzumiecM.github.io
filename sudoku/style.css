@@ -286,6 +286,10 @@ header {
   border-radius: 12px;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 24px rgba(99, 102, 241, 0.1);
   overflow: hidden;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
 }
 
 /* 9x9 CSS Grid */
@@ -295,6 +299,10 @@ header {
   grid-template-rows: repeat(9, 1fr);
   width: 100%;
   height: 100%;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
 }
 
 /* Individual Cell */
@@ -314,7 +322,9 @@ header {
   margin: 0;
   z-index: 1;
   -webkit-touch-callout: none;
-  touch-action: manipulation;
+    -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
 }
 
 /* Thick 3x3 block borders */
@@ -595,13 +605,15 @@ header {
 .rotary-overlay {
   position: fixed;
   inset: 0;
-  z-index: 100;
-  background: rgba(8, 10, 16, 0.55);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  z-index: 500;
+  background: rgba(8, 10, 16, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-touch-callout: none;
+  touch-action: none;
 }
 
 .rotary-overlay.active {
@@ -611,10 +623,10 @@ header {
 
 .rotary-wheel {
   position: absolute;
-  width: 220px;
-  height: 220px;
-  margin-left: -110px;
-  margin-top: -110px;
+  width: 230px;
+  height: 230px;
+  margin-left: -115px;
+  margin-top: -115px;
   border-radius: 50%;
   background: rgba(16, 20, 34, 0.92);
   border: 2px solid rgba(99, 102, 241, 0.4);
@@ -633,7 +645,7 @@ header {
 .rotary-wheel::before {
   content: '';
   position: absolute;
-  inset: 22px;
+  inset: 24px;
   border-radius: 50%;
   border: 1px dashed rgba(255, 255, 255, 0.12);
   pointer-events: none;
@@ -643,8 +655,8 @@ header {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 52px;
-  height: 52px;
+  width: 54px;
+  height: 54px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: rgba(239, 68, 68, 0.15);
@@ -663,7 +675,8 @@ header {
   height: 20px;
 }
 
-.rotary-center.hovered {
+.rotary-center.hovered,
+.rotary-center:active {
   background: rgba(239, 68, 68, 0.4);
   transform: translate(-50%, -50%) scale(1.15);
   box-shadow: 0 0 16px rgba(239, 68, 68, 0.5);
@@ -671,10 +684,10 @@ header {
 
 .rotary-item {
   position: absolute;
-  width: 42px;
-  height: 42px;
-  margin-left: -21px;
-  margin-top: -21px;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -683,14 +696,15 @@ header {
   align-items: center;
   justify-content: center;
   font-family: var(--font-sans);
-  font-size: 1.25rem;
+  font-size: 1.3rem;
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-.rotary-item.hovered {
+.rotary-item.hovered,
+.rotary-item:active {
   background: var(--accent-primary);
   border-color: #a5b4fc;
   color: #ffffff;
@@ -702,7 +716,7 @@ header {
 .victory-modal {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 600;
   background: rgba(8, 10, 16, 0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);

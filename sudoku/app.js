@@ -31,6 +31,10 @@
   let rotaryCellIdx = null;
   let activeRotaryHover = null; // null, 0 (clear), or 1..9
   let wheelCenter = { x: 0, y: 0 };
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let hasDraggedOut = false;
+  let overlayOpenTime = 0;
 
   // Storage key for multi-difficulty sessions
   const SESSIONS_STORAGE_KEY = 'sudoku_saved_sessions_v2';
@@ -162,15 +166,15 @@
 
   // --- Setup Rotary Dial Items ---
   function setupRotaryDial() {
-    const radius = 78;
+    const radius = 80;
     const items = rotaryWheel.querySelectorAll('.rotary-item');
 
     items.forEach((item) => {
       const num = parseInt(item.dataset.num, 10);
       const angleDeg = -90 + (num - 1) * 40;
       const angleRad = (angleDeg * Math.PI) / 180;
-      const x = 110 + radius * Math.cos(angleRad);
-      const y = 110 + radius * Math.sin(angleRad);
+      const x = 115 + radius * Math.cos(angleRad);
+      const y = 115 + radius * Math.sin(angleRad);
 
       item.style.left = `${x}px`;
       item.style.top = `${y}px`;
@@ -641,25 +645,36 @@
   }
 
   // --- Rotary Dial Touch & Hold Controller (Stationary Phone Style) ---
-  function openRotaryDial(cellIdx, clientX, clientY) {
+  function openRotaryDial(cellIdx, cellEl) {
     if (isCompleted || puzzle[cellIdx] !== 0) return;
 
     selectCell(cellIdx);
     rotaryCellIdx = cellIdx;
     isRotaryOpen = true;
+    overlayOpenTime = Date.now();
+    hasDraggedOut = false;
+    activeRotaryHover = null;
 
-    const wheelRadius = 110;
-    const padding = 15;
-    let x = Math.max(wheelRadius + padding, Math.min(window.innerWidth - wheelRadius - padding, clientX));
-    let y = Math.max(wheelRadius + padding, Math.min(window.innerHeight - wheelRadius - padding, clientY));
+    // Center wheel exactly over target cell bounding box
+    const cellRect = cellEl.getBoundingClientRect();
+    const centerX = cellRect.left + cellRect.width / 2;
+    const centerY = cellRect.top + cellRect.height / 2;
+
+    const wheelRadius = 115;
+    const padding = 10;
+    let x = Math.max(wheelRadius + padding, Math.min(window.innerWidth - wheelRadius - padding, centerX));
+    let y = Math.max(wheelRadius + padding, Math.min(window.innerHeight - wheelRadius - padding, centerY));
 
     wheelCenter = { x, y };
     rotaryWheel.style.left = `${x}px`;
     rotaryWheel.style.top = `${y}px`;
 
+    rotaryCenter.classList.remove('hovered');
+    rotaryWheel.querySelectorAll('.rotary-item').forEach(el => el.classList.remove('hovered'));
+
     rotaryOverlay.classList.add('active');
 
-    if (navigator.vibrate) navigator.vibrate(12);
+    if (navigator.vibrate) navigator.vibrate(20);
   }
 
   function updateRotaryTarget(clientX, clientY) {
@@ -672,13 +687,22 @@
     rotaryCenter.classList.remove('hovered');
     rotaryWheel.querySelectorAll('.rotary-item').forEach(el => el.classList.remove('hovered'));
 
-    if (dist < 32) {
+    if (dist > 35) {
+      hasDraggedOut = true;
+    }
+
+    if (!hasDraggedOut) {
+      activeRotaryHover = null;
+      return;
+    }
+
+    if (dist < 28) {
       rotaryCenter.classList.add('hovered');
       activeRotaryHover = 0;
       return;
     }
 
-    if (dist >= 45 && dist <= 145) {
+    if (dist >= 35 && dist <= 145) {
       let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
       let relAngle = angle - (-90);
       while (relAngle < 0) relAngle += 360;
@@ -690,6 +714,9 @@
       const targetEl = rotaryWheel.querySelector(`.rotary-item[data-num="${hoveredNum}"]`);
       if (targetEl) {
         targetEl.classList.add('hovered');
+        if (activeRotaryHover !== hoveredNum && navigator.vibrate) {
+          navigator.vibrate(8);
+        }
         activeRotaryHover = hoveredNum;
       }
       return;
@@ -718,6 +745,7 @@
     isRotaryOpen = false;
     rotaryCellIdx = null;
     activeRotaryHover = null;
+    hasDraggedOut = false;
     rotaryOverlay.classList.remove('active');
     rotaryCenter.classList.remove('hovered');
     rotaryWheel.querySelectorAll('.rotary-item').forEach(el => el.classList.remove('hovered'));
@@ -727,7 +755,29 @@
   function bindEvents() {
     window.addEventListener('keydown', handleKeyDown);
 
-    // Grid Cell Click & Long-Press Delegation
+    // Suppress system context menu on mobile hold
+    window.addEventListener('contextmenu', (e) => {
+      if (isRotaryOpen || longPressTimeout) {
+        e.preventDefault();
+      }
+    });
+
+    // Helper for pointer & touch release
+    function handleRotaryRelease() {
+      if (longPressTimeout) {
+        clearTimeout(longPressTimeout);
+        longPressTimeout = null;
+      }
+      if (isRotaryOpen) {
+        if (hasDraggedOut && activeRotaryHover !== null) {
+          commitRotarySelection();
+        } else if (hasDraggedOut && activeRotaryHover === null) {
+          closeRotaryDial();
+        }
+      }
+    }
+
+    // Grid Cell Pointer & Touch Press
     gridEl.addEventListener('pointerdown', (e) => {
       const cell = e.target.closest('.cell');
       if (!cell) return;
@@ -738,47 +788,65 @@
       selectCell(idx);
 
       if (!isClue && !isCompleted) {
+        touchStartX = e.clientX;
+        touchStartY = e.clientY;
         clearTimeout(longPressTimeout);
         longPressTimeout = setTimeout(() => {
-          openRotaryDial(idx, e.clientX, e.clientY);
-        }, 340);
+          openRotaryDial(idx, cell);
+        }, 240);
       }
     });
 
     window.addEventListener('pointermove', (e) => {
       if (longPressTimeout) {
-        clearTimeout(longPressTimeout);
-        longPressTimeout = null;
+        const moveDist = Math.hypot(e.clientX - touchStartX, e.clientY - touchStartY);
+        if (moveDist > 14) {
+          clearTimeout(longPressTimeout);
+          longPressTimeout = null;
+        }
       }
       if (isRotaryOpen) {
         updateRotaryTarget(e.clientX, e.clientY);
       }
     });
 
-    window.addEventListener('pointerup', () => {
-      if (longPressTimeout) {
-        clearTimeout(longPressTimeout);
-        longPressTimeout = null;
-      }
-      if (isRotaryOpen) {
-        commitRotarySelection();
-      }
-    });
+    window.addEventListener('pointerup', handleRotaryRelease);
 
     window.addEventListener('pointercancel', () => {
       if (longPressTimeout) {
         clearTimeout(longPressTimeout);
         longPressTimeout = null;
       }
-      if (isRotaryOpen) closeRotaryDial();
     });
 
-    // Rotary Overlay Click to close
+    // Touch events for ultra-reliable mobile tracking and scroll prevention
+    window.addEventListener('touchmove', (e) => {
+      if (longPressTimeout && e.touches.length > 0) {
+        const t = e.touches[0];
+        const moveDist = Math.hypot(t.clientX - touchStartX, t.clientY - touchStartY);
+        if (moveDist > 14) {
+          clearTimeout(longPressTimeout);
+          longPressTimeout = null;
+        }
+      }
+      if (isRotaryOpen && e.touches.length > 0) {
+        const t = e.touches[0];
+        updateRotaryTarget(t.clientX, t.clientY);
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchend', handleRotaryRelease);
+
+    // Rotary Overlay Click / Backdrop dismiss
     rotaryOverlay.addEventListener('click', (e) => {
-      if (e.target === rotaryOverlay) closeRotaryDial();
+      if (Date.now() - overlayOpenTime < 250) return;
+      if (e.target === rotaryOverlay) {
+        closeRotaryDial();
+      }
     });
 
-    // Direct clicks on rotary wheel items
+    // Direct clicks on rotary wheel items (Tap-to-select support)
     rotaryWheel.addEventListener('click', (e) => {
       const item = e.target.closest('.rotary-item');
       if (item && rotaryCellIdx !== null) {
@@ -791,6 +859,10 @@
       if (center && rotaryCellIdx !== null) {
         selectedIdx = rotaryCellIdx;
         eraseSelectedCell();
+        closeRotaryDial();
+        return;
+      }
+      if (Date.now() - overlayOpenTime >= 250) {
         closeRotaryDial();
       }
     });
