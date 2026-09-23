@@ -718,16 +718,17 @@ header {
   border: 1px solid var(--border-color);
   color: var(--text-main);
   font-family: var(--font-sans);
-  font-size: clamp(1.1rem, 3.5vw, 1.45rem);
-  font-weight: 600;
-  aspect-ratio: 1 / 1.15;
+  aspect-ratio: 1 / 1.22;
   border-radius: 8px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 4px 0 3px;
   transition: all 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .num-btn:hover {
@@ -740,13 +741,32 @@ header {
   transform: translateY(0);
 }
 
+.num-digit {
+  font-size: clamp(1.05rem, 3.4vw, 1.4rem);
+  font-weight: 600;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .num-btn .count-badge {
-  position: absolute;
-  bottom: 3px;
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-family: var(--font-mono);
   color: var(--text-dim);
   font-weight: 500;
+  line-height: 1;
+  margin-top: 3px;
+  letter-spacing: -0.02em;
+}
+
+/* Hardcore Mode: hide count badges completely and center digits */
+.keypad.hide-counts .count-badge {
+  display: none !important;
+}
+
+.keypad.hide-counts .num-digit {
+  margin: 0;
 }
 
 .num-btn.completed {
@@ -1023,7 +1043,7 @@ button:focus-visible,
   .keypad {
     gap: 0.25rem;
   }
-  .num-btn {
+  .num-digit {
     font-size: 1.15rem;
   }
 }

@@ -103,6 +103,7 @@
 
     updateConflictClasses();
     applySelectionHighlights();
+    updateKeypadCounts();
   }
 
   function hideAssistBubble(delay = 650) {
@@ -538,12 +539,24 @@
 
   // --- Keypad Remaining Counts ---
   function updateKeypadCounts() {
+    const isHardcore = assistLevel === 0;
+    const keypadEl = document.querySelector('.keypad');
+    if (keypadEl) {
+      keypadEl.classList.toggle('hide-counts', isHardcore);
+    }
+
+    if (isHardcore) {
+      numButtons.forEach((btn) => {
+        btn.classList.remove('completed');
+      });
+      return;
+    }
+
     const counts = new Uint8Array(10);
     for (let i = 0; i < 81; i++) {
       const v = board[i];
       if (v >= 1 && v <= 9) counts[v]++;
     }
-
     numButtons.forEach((btn) => {
       const num = parseInt(btn.dataset.num, 10);
       const remaining = 9 - (counts[num] || 0);
