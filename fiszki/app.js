@@ -13,7 +13,6 @@
   const STORAGE_KEY_PROGRESS = 'fiszki_progress_v1';
   const STORAGE_KEY_SETTINGS = 'fiszki_settings_v1';
   const STORAGE_KEY_CUSTOM_DECKS = 'fiszki_custom_decks_v1';
-  const STORAGE_KEY_ACTIVE_SESSION = 'fiszki_active_session_v1';
 
   const GROUP_NAMES = {
     all: 'Wszystkie grupy',
@@ -35,12 +34,13 @@
     customDecks: [],
     cardProgress: {}, // cardId: { b: box (1..5), l: lapses, r: reviews, t: timestamp, lastRating: 1..3 }
     sessionQueue: [], // Array of card objects currently in review
+    sessionDifficultCards: [], // Cards rated 1 or 2 during current session for repeat
     currentIndex: 0,
     isFlipped: false,
     streak: 0,
     sessionStats: { reviewed: 0, known: 0, medium: 0, lapsed: 0 },
     settings: {
-      voiceName: '',
+      voiceAccent: 'en-US', // 'en-US' (default) or 'en-GB'
       speechRate: 0.95,
       autoSpeak: true,
       direction: 'en-pl', // 'en-pl' or 'pl-en'
@@ -68,11 +68,8 @@
     setupTouchGestures();
     attachEventListeners();
     applySettingsToUI();
-
-    const sessionRestored = restoreActiveSession();
-    if (!sessionRestored) {
-      buildSessionQueue();
-    }
+    // Fresh session on page load/reload
+    buildSessionQueue();
     renderCurrentCard();
   }
 
@@ -81,6 +78,9 @@
       const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
       if (saved) {
         state.settings = Object.assign(state.settings, JSON.parse(saved));
+        if (!state.settings.voiceAccent) {
+          state.settings.voiceAccent = 'en-US';
+        }
       }
     } catch (e) {
       console.warn('Failed to load settings', e);
@@ -120,69 +120,6 @@
 
   function queueSaveProgress() {
     saveProgressNow();
-  }
-
-  function saveActiveSession() {
-    if (!state.sessionQueue || state.sessionQueue.length === 0 || state.currentIndex >= state.sessionQueue.length) {
-      clearActiveSession();
-      return;
-    }
-    try {
-      const sessionData = {
-        cardIds: state.sessionQueue.map(c => c.id),
-        currentIndex: state.currentIndex,
-        sessionStats: state.sessionStats,
-        streak: state.streak,
-        group: state.settings.activeGroup,
-        level: state.settings.activeLevel,
-        scope: state.settings.scope,
-        savedAt: Date.now()
-      };
-      localStorage.setItem(STORAGE_KEY_ACTIVE_SESSION, JSON.stringify(sessionData));
-    } catch (e) {
-      console.warn('Failed saving active session', e);
-    }
-  }
-
-  function clearActiveSession() {
-    try {
-      localStorage.removeItem(STORAGE_KEY_ACTIVE_SESSION);
-    } catch (e) {}
-  }
-
-  function restoreActiveSession() {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_ACTIVE_SESSION);
-      if (!saved) return false;
-      const sessionData = JSON.parse(saved);
-      if (!sessionData || !Array.isArray(sessionData.cardIds) || sessionData.cardIds.length === 0) return false;
-
-      // Filter mismatch check
-      if (sessionData.group !== state.settings.activeGroup || sessionData.level !== state.settings.activeLevel) {
-        return false;
-      }
-
-      const cardMap = new Map(state.allWords.map(c => [c.id, c]));
-      const queue = [];
-      for (const id of sessionData.cardIds) {
-        const card = cardMap.get(id);
-        if (card) queue.push(card);
-      }
-
-      if (queue.length === 0 || sessionData.currentIndex >= queue.length) {
-        clearActiveSession();
-        return false;
-      }
-
-      state.sessionQueue = queue;
-      state.currentIndex = sessionData.currentIndex || 0;
-      state.sessionStats = sessionData.sessionStats || { reviewed: 0, known: 0, medium: 0, lapsed: 0 };
-      state.streak = sessionData.streak || 0;
-      return true;
-    } catch (e) {
-      console.warn('Failed restoring active session', e);
-      return false;
-    }
   }
 
   function loadCustomDecks() {
@@ -234,57 +171,51 @@
   }
 
   /* ==========================================================================
-     AUDIO / WEB SPEECH SYNTHESIS & GOOGLE VOICE INTEGRATION
+     AUDIO / WEB SPEECH SYNTHESIS & US/UK ACCENTS
      ========================================================================== */
   function initSpeechSynthesis() {
     if (!('speechSynthesis' in window)) return;
 
-    const populateVoiceList = () => {
-      const voices = window.speechSynthesis.getVoices();
-      if (!voices || voices.length === 0) return;
-
-      // Filter for English voices
-      const enVoices = voices.filter(v => v.lang.startsWith('en'));
-
-      // Sort: Prioritize Google voices and natural/neural voices
-      enVoices.sort((a, b) => {
-        const aIsGoogle = a.name.includes('Google') || a.name.includes('Natural');
-        const bIsGoogle = b.name.includes('Google') || b.name.includes('Natural');
-        if (aIsGoogle && !bIsGoogle) return -1;
-        if (!aIsGoogle && bIsGoogle) return 1;
-        return a.name.localeCompare(b.name);
-      });
-
-      availableVoices = enVoices;
-
-      const select = document.getElementById('select-tts-voice');
-      if (!select) return;
-
-      select.innerHTML = '<option value="">Automatyczny / domyślny systemowy</option>';
-      enVoices.forEach(voice => {
-        const opt = document.createElement('option');
-        opt.value = voice.name;
-        const isGoogle = voice.name.includes('Google') ? ' ⭐ [Google]' : '';
-        opt.textContent = `${voice.name} (${voice.lang})${isGoogle}`;
-        if (voice.name === state.settings.voiceName) {
-          opt.selected = true;
-        }
-        select.appendChild(opt);
-      });
+    const cacheVoices = () => {
+      try {
+        availableVoices = window.speechSynthesis.getVoices() || [];
+      } catch (e) {
+        availableVoices = [];
+      }
     };
 
-    window.speechSynthesis.onvoiceschanged = populateVoiceList;
-    populateVoiceList();
+    window.speechSynthesis.onvoiceschanged = cacheVoices;
+    cacheVoices();
+  }
+
+  function getBestVoiceForAccent(accent) {
+    if (!availableVoices || availableVoices.length === 0) return null;
+    const target = accent.toLowerCase().replace('_', '-'); // 'en-us' or 'en-gb'
+    const langVoices = availableVoices.filter(v => {
+      const vLang = (v.lang || '').toLowerCase().replace('_', '-');
+      return vLang.startsWith(target);
+    });
+
+    if (langVoices.length === 0) {
+      const anyEn = availableVoices.filter(v => (v.lang || '').toLowerCase().startsWith('en'));
+      return anyEn[0] || null;
+    }
+
+    // Prioritize natural/Google voices, then Siri / Natural
+    const preferred = langVoices.find(v => v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Siri'));
+    return preferred || langVoices[0];
   }
 
   function speakEnglishWord(textToSpeak, force = false) {
     if (!textToSpeak) return;
     if (!force && !state.settings.autoSpeak) return;
 
+    const accent = state.settings.voiceAccent || 'en-US';
+
     if (!('speechSynthesis' in window)) {
-      // Fallback via Google Translate TTS audio endpoint if Web Speech unsupported
+      // Fallback via Google Translate TTS endpoint with chosen accent
       try {
-        const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=${encodeURIComponent(textToSpeak)}`;
+        const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${accent}&q=${encodeURIComponent(textToSpeak)}`;
         const audio = new Audio(audioUrl);
         audio.play().catch(() => {});
       } catch (e) {}
@@ -295,16 +226,12 @@
       window.speechSynthesis.cancel(); // Stop previous utterance
 
       const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      utterance.lang = 'en-US';
+      utterance.lang = accent;
       utterance.rate = parseFloat(state.settings.speechRate) || 0.95;
 
-      if (state.settings.voiceName && availableVoices.length > 0) {
-        const chosenVoice = availableVoices.find(v => v.name === state.settings.voiceName);
-        if (chosenVoice) utterance.voice = chosenVoice;
-      } else {
-        // Prefer Google voice if available in list
-        const googleVoice = availableVoices.find(v => v.name.includes('Google') && v.lang.startsWith('en'));
-        if (googleVoice) utterance.voice = googleVoice;
+      const voice = getBestVoiceForAccent(accent);
+      if (voice) {
+        utterance.voice = voice;
       }
 
       window.speechSynthesis.speak(utterance);
@@ -316,8 +243,7 @@
   /* ==========================================================================
      SPACED REPETITION (LEITNER 5-BOX) ALGORITHM & QUEUE
      ========================================================================== */
-  function buildSessionQueue(onlyLapsed = false) {
-    clearActiveSession();
+  function buildSessionQueue(isDueOnly = false) {
     let pool = [...state.allWords];
 
     // Filter by group
@@ -330,64 +256,75 @@
       pool = pool.filter(c => c.level === state.settings.activeLevel);
     }
 
-    // Filter by scope (all vs due/lapsed)
-    if (onlyLapsed || state.settings.scope === 'due') {
-      const lapsedCards = pool.filter(c => {
+    // Filter by scope (due/lapsed review only)
+    if (isDueOnly || state.settings.scope === 'due') {
+      const now = Date.now();
+      const intervals = [0, 0, 12 * 3600000, 48 * 3600000, 7 * 86400000, 21 * 86400000];
+
+      pool = pool.filter(c => {
         const p = state.cardProgress[c.id];
-        return p && (p.lastRating === 1 || p.b <= 1);
+        if (!p || !p.r) return false;
+        if (p.lastRating === 1 || p.lastRating === 2 || p.b <= 1) return true;
+        const interval = intervals[p.b] || (24 * 3600000);
+        return (now - (p.t || 0)) >= interval;
+      });
+    } else {
+      // Leitner Priority Score for large decks (1,000+ words):
+      // 1. Lapsed / Failed cards (lastRating === 1) -> Score 100+
+      // 2. Overdue SRS review cards (Box 2-5 due by interval) -> Score 60-95
+      // 3. Fresh unseen cards (never studied) -> Score 40-50
+      // 4. Recently reviewed / mastered cards -> Score 10-30
+      const now = Date.now();
+      const intervals = [0, 0, 12 * 3600000, 48 * 3600000, 7 * 86400000, 21 * 86400000];
+
+      pool.sort((a, b) => {
+        const pA = state.cardProgress[a.id];
+        const pB = state.cardProgress[b.id];
+
+        const scoreA = getPriorityScore(pA, now, intervals);
+        const scoreB = getPriorityScore(pB, now, intervals);
+
+        return scoreB - scoreA;
       });
 
-      if (lapsedCards.length === 0) {
-        if (pool.length > 0) {
-          showToast('Wszystkie trudne słówka opanowane! 🎉 Wczytuję nową sesję.');
-        }
-        state.settings.scope = 'all';
-        saveSettings();
-        const scopeBtn = document.getElementById('btn-toggle-scope');
-        const scopeText = document.getElementById('scope-pill-text');
-        if (scopeBtn) scopeBtn.classList.remove('active');
-        if (scopeText) scopeText.textContent = 'Wszystkie';
-      } else {
-        pool = lapsedCards;
+      // Enforce fixed session length
+      const limit = parseInt(state.settings.sessionSize, 10);
+      if (limit > 0 && pool.length > limit) {
+        pool = pool.slice(0, limit);
+      }
+
+      // Slightly shuffle the selected batch so cards don't appear in strict deterministic sequence
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
       }
     }
 
-    // Leitner Priority Score for large decks (1,000+ words):
-    // 1. Lapsed / Failed cards (lastRating === 1) -> Score 100+
-    // 2. Overdue SRS review cards (Box 2-5 due by interval) -> Score 60-95
-    // 3. Fresh unseen cards (never studied) -> Score 40-50
-    // 4. Recently reviewed / mastered cards -> Score 10-30
-    const now = Date.now();
-    const intervals = [0, 0, 12 * 3600000, 48 * 3600000, 7 * 86400000, 21 * 86400000];
-
-    pool.sort((a, b) => {
-      const pA = state.cardProgress[a.id];
-      const pB = state.cardProgress[b.id];
-
-      const scoreA = getPriorityScore(pA, now, intervals);
-      const scoreB = getPriorityScore(pB, now, intervals);
-
-      return scoreB - scoreA;
-    });
-
-    // Enforce fixed session length
-    const limit = parseInt(state.settings.sessionSize, 10);
-    if (limit > 0 && pool.length > limit) {
-      pool = pool.slice(0, limit);
-    }
-
-    // Slightly shuffle the selected batch so cards don't appear in strict deterministic sequence
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-
     state.sessionQueue = pool;
+    state.sessionDifficultCards = []; // Reset per-session repeat queue
     state.currentIndex = 0;
     state.streak = 0;
     state.sessionStats = { reviewed: 0, known: 0, medium: 0, lapsed: 0 };
     setCardFlipped(false);
-    saveActiveSession();
+  }
+
+  function startRepeatDifficultSession() {
+    if (!state.sessionDifficultCards || state.sessionDifficultCards.length === 0) {
+      showToast('Brak trudnych słówek do powtórki! 🎉');
+      return;
+    }
+
+    // Queue ONLY the difficult cards from this session
+    state.sessionQueue = [...state.sessionDifficultCards];
+    state.sessionDifficultCards = []; // Reset for the retry session
+    state.currentIndex = 0;
+    state.streak = 0;
+    state.sessionStats = { reviewed: 0, known: 0, medium: 0, lapsed: 0 };
+    setCardFlipped(false);
+
+    document.getElementById('modal-session-complete').classList.add('hidden');
+    renderCurrentCard();
+    showToast(`Powtórka: ${state.sessionQueue.length} trudnych słówek`);
   }
 
   function getPriorityScore(p, now, intervals) {
@@ -463,7 +400,13 @@
       const levelName = state.settings.activeLevel === 'all' ? 'Wszystkie poziomy' : state.settings.activeLevel;
       const desc = document.getElementById('empty-state-desc');
       if (desc) {
-        desc.textContent = `Brak słówek w kombinacji: ${groupName} · Poziom ${levelName}.`;
+        if (state.settings.scope === 'due') {
+          desc.textContent = 'Brak słówek do powtórki w wybranej grupie. Wszystko powtórzone na czas! 🎉';
+        } else {
+          const groupName = GROUP_NAMES[state.settings.activeGroup] || 'Wybrana grupa';
+          const levelName = state.settings.activeLevel === 'all' ? 'Wszystkie poziomy' : state.settings.activeLevel;
+          desc.textContent = `Brak słówek w kombinacji: ${groupName} · Poziom ${levelName}.`;
+        }
       }
 
       document.getElementById('queue-remaining-count').textContent = '0';
@@ -486,6 +429,18 @@
       rateButtons.forEach(btn => {
         if (btn) btn.classList.add('disabled');
       });
+
+      // Update in-stage repeat difficult button
+      const btnStageReviewLapsed = document.getElementById('btn-stage-review-lapsed');
+      if (btnStageReviewLapsed) {
+        const diffCount = (state.sessionDifficultCards || []).length;
+        if (diffCount > 0) {
+          btnStageReviewLapsed.textContent = `Powtórz trudne (${diffCount})`;
+          btnStageReviewLapsed.style.display = 'inline-flex';
+        } else {
+          btnStageReviewLapsed.style.display = 'none';
+        }
+      }
 
       updateMasterySummary();
 
@@ -612,12 +567,12 @@
       const p = state.cardProgress[c.id];
       if (!p || !p.r) {
         newCards++;
-      } else if (p.lastRating === 3 || p.b >= 3) {
-        known++;
+      } else if (p.lastRating === 1) {
+        lapsed++;
       } else if (p.lastRating === 2) {
         learning++;
       } else {
-        lapsed++;
+        known++;
       }
     });
 
@@ -647,6 +602,13 @@
       return;
     }
 
+    // Visual button pulse feedback for user
+    const activeBtn = document.getElementById(`btn-rate-${level}`);
+    if (activeBtn) {
+      activeBtn.classList.add('btn-rated-active');
+      setTimeout(() => activeBtn.classList.remove('btn-rated-active'), 250);
+    }
+
     const prog = state.cardProgress[currentCard.id] || { b: 1, l: 0, r: 0 };
     prog.r = (prog.r || 0) + 1;
     prog.t = Date.now();
@@ -659,17 +621,30 @@
       prog.lastRating = 1;
       state.streak = 0;
       state.sessionStats.lapsed += 1;
+
+      // Track as difficult for per-session repetition
+      if (!state.sessionDifficultCards.some(c => c.id === currentCard.id)) {
+        state.sessionDifficultCards.push(currentCard);
+      }
     } else if (level === 2) {
       // 'ŚREDNIO': Box 2 (in learning), keep streak
-      prog.b = Math.max(2, prog.b || 1);
+      prog.b = 2;
       prog.lastRating = 2;
       state.sessionStats.medium += 1;
+
+      // Track as difficult for per-session repetition
+      if (!state.sessionDifficultCards.some(c => c.id === currentCard.id)) {
+        state.sessionDifficultCards.push(currentCard);
+      }
     } else if (level === 3) {
       // 'ZNAM!': Advance Leitner Box (up to 5), increment streak
       prog.b = Math.min(5, Math.max(2, (prog.b || 1) + 1));
       prog.lastRating = 3;
       state.streak += 1;
       state.sessionStats.known += 1;
+
+      // If mastered, remove from repeat queue
+      state.sessionDifficultCards = state.sessionDifficultCards.filter(c => c.id !== currentCard.id);
     }
 
     state.cardProgress[currentCard.id] = prog;
@@ -678,7 +653,6 @@
     // Advance to next card (fixed session length - no reinserting)
     setCardFlipped(false);
     state.currentIndex += 1;
-    saveActiveSession();
 
     // Instantly update the bottom mastery summary counters
     updateMasterySummary();
@@ -694,7 +668,6 @@
      SESSION SUMMARY MODAL
      ========================================================================== */
   function showSessionCompleteModal() {
-    clearActiveSession();
     const modal = document.getElementById('modal-session-complete');
     document.getElementById('stat-reviewed-total').textContent = state.sessionStats.reviewed;
     document.getElementById('stat-known-total').textContent = state.sessionStats.known;
@@ -704,13 +677,13 @@
       : 100;
     document.getElementById('stat-accuracy-rate').textContent = `${rate}%`;
 
-    // Dynamic lapsed count for retry buttons
-    const lapsedCards = getLapsedCardsInScope();
+    // Dynamic lapsed count for repeat buttons in modal
+    const diffCount = (state.sessionDifficultCards || []).length;
     const btnReviewLapsed = document.getElementById('btn-review-lapsed-only');
     const btnStageReviewLapsed = document.getElementById('btn-stage-review-lapsed');
 
-    if (lapsedCards.length > 0) {
-      const text = `Powtórz trudne słówka (${lapsedCards.length})`;
+    if (diffCount > 0) {
+      const text = `Powtórz trudne słówka (${diffCount})`;
       if (btnReviewLapsed) {
         btnReviewLapsed.textContent = text;
         btnReviewLapsed.style.display = 'block';
@@ -725,20 +698,6 @@
     }
 
     modal.classList.remove('hidden');
-  }
-
-  function getLapsedCardsInScope() {
-    let pool = state.allWords;
-    if (state.settings.activeGroup !== 'all') {
-      pool = pool.filter(c => c.group === state.settings.activeGroup);
-    }
-    if (state.settings.activeLevel !== 'all') {
-      pool = pool.filter(c => c.level === state.settings.activeLevel);
-    }
-    return pool.filter(c => {
-      const p = state.cardProgress[c.id];
-      return p && (p.lastRating === 1 || p.b <= 1);
-    });
   }
 
 
@@ -920,16 +879,16 @@
      TOUCH & MOBILE SWIPE GESTURES
      ========================================================================== */
   function setupTouchGestures() {
-    const cardStage = document.getElementById('card-stage');
     const cardInner = document.getElementById('flashcard-inner');
-    if (!cardStage || !cardInner) return;
+    if (!cardInner) return;
 
     let startX = 0;
     let startY = 0;
     let currentX = 0;
+    let currentY = 0;
     let isSwiping = false;
 
-    cardStage.addEventListener('touchstart', (e) => {
+    cardInner.addEventListener('touchstart', (e) => {
       // Don't capture swipe if tapping sound or action button
       if (e.target.closest('button')) return;
 
@@ -937,46 +896,62 @@
       startX = touch.clientX;
       startY = touch.clientY;
       currentX = startX;
+      currentY = startY;
       isSwiping = true;
     }, { passive: true });
 
-    cardStage.addEventListener('touchmove', (e) => {
+    cardInner.addEventListener('touchmove', (e) => {
       if (!isSwiping) return;
       const touch = e.touches[0];
       currentX = touch.clientX;
+      currentY = touch.clientY;
       const diffX = currentX - startX;
-      const diffY = touch.clientY - startY;
+      const diffY = currentY - startY;
+      const absX = Math.abs(diffX);
+      const absY = Math.abs(diffY);
 
-      // If horizontal drag is significant, provide tactile tilt feedback
-      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 15) {
+      // If horizontal drag is clearly dominant: provide tilt feedback
+      if (absX > absY * 1.2 && absX > 15) {
         const rotate = (diffX / 25).toFixed(2);
         cardInner.style.transform = `translate3d(${diffX}px, 0, 0) rotateZ(${rotate}deg) ${state.isFlipped ? 'rotateY(180deg)' : ''}`;
       }
+      // If vertical drag downward on the card is clearly dominant: pull card down with visual feedback for "Średnio"
+      else if (diffY > 15 && diffY > absX * 1.2) {
+        const scale = Math.max(0.92, 1 - (diffY / 900));
+        cardInner.style.transform = `translate3d(0, ${diffY}px, 0) scale(${scale}) ${state.isFlipped ? 'rotateY(180deg)' : ''}`;
+      }
     }, { passive: true });
 
-    cardStage.addEventListener('touchend', (e) => {
+    cardInner.addEventListener('touchend', (e) => {
       if (!isSwiping) return;
       isSwiping = false;
       lastTouchTime = Date.now();
       const diffX = currentX - startX;
-      const diffY = e.changedTouches[0].clientY - startY;
+      const diffY = currentY - startY;
+      const absX = Math.abs(diffX);
+      const absY = Math.abs(diffY);
 
-      // Reset inline transform to allow clean CSS flip transitions
+      // Reset inline transform to allow clean CSS transitions
       cardInner.style.transform = '';
 
-      // Check if it was a tap (< 15px travel)
-      if (Math.abs(diffX) < 15 && Math.abs(diffY) < 15) {
+      // Check if it was a tap (< 15px travel in both dimensions)
+      if (absX < 15 && absY < 15) {
         toggleFlip();
         return;
       }
 
-      // Horizontal swipe threshold: 75px
-      if (diffX > 75) {
-        // Swipe Right -> Znam!
-        handleRating(3);
-      } else if (diffX < -75) {
-        // Swipe Left -> Nie znam
-        handleRating(1);
+      // Check gestures with strict axis dominance (1.3x) to prevent diagonal misfires
+      if (absX >= 60 && absX > absY * 1.3) {
+        if (diffX > 0) {
+          // Swipe Right -> Znam! (3)
+          handleRating(3);
+        } else {
+          // Swipe Left -> Nie znam (1)
+          handleRating(1);
+        }
+      } else if (diffY >= 60 && diffY > absX * 1.3) {
+        // Swipe Down on the card -> Średnio (2)
+        handleRating(2);
       }
     }, { passive: true });
   }
@@ -1057,6 +1032,9 @@
 
     const sizeSelect = document.getElementById('select-session-size');
     if (sizeSelect) sizeSelect.value = state.settings.sessionSize;
+
+    const voiceSelect = document.getElementById('select-tts-voice');
+    if (voiceSelect) voiceSelect.value = state.settings.voiceAccent || 'en-US';
   }
 
   /* ==========================================================================
@@ -1164,10 +1142,11 @@
     });
 
     document.getElementById('select-tts-voice').addEventListener('change', (e) => {
-      state.settings.voiceName = e.target.value;
+      state.settings.voiceAccent = e.target.value;
       saveSettings();
       const card = state.sessionQueue[state.currentIndex];
       if (card) speakEnglishWord(card.en, true);
+      showToast(state.settings.voiceAccent === 'en-GB' ? 'Ustawiono akcent brytyjski 🇬🇧' : 'Ustawiono akcent amerykański 🇺🇸');
     });
 
     document.getElementById('range-speech-rate').addEventListener('input', (e) => {
@@ -1220,9 +1199,7 @@
     });
 
     document.getElementById('btn-review-lapsed-only').addEventListener('click', () => {
-      document.getElementById('modal-session-complete').classList.add('hidden');
-      buildSessionQueue(true);
-      renderCurrentCard();
+      startRepeatDifficultSession();
     });
 
     // 9. Empty State Action Buttons
@@ -1262,8 +1239,7 @@
     const btnStageReviewLapsed = document.getElementById('btn-stage-review-lapsed');
     if (btnStageReviewLapsed) {
       btnStageReviewLapsed.addEventListener('click', () => {
-        buildSessionQueue(true);
-        renderCurrentCard();
+        startRepeatDifficultSession();
       });
     }
 
@@ -1312,7 +1288,6 @@
      ========================================================================== */
   window.addEventListener('beforeunload', () => {
     saveProgressNow();
-    saveActiveSession();
   });
 
   if (document.readyState === 'loading') {

@@ -44,11 +44,12 @@
 html,
 body {
   width: 100%;
-  height: 100%;
-  height: 100dvh;
+  min-height: 100%;
+  min-height: 100dvh;
   margin: 0;
   padding: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overscroll-behavior-y: auto;
   background-color: var(--bg-dark);
   color: var(--text-main);
   font-family: var(--font-sans);
@@ -90,7 +91,6 @@ body {
   width: 100%;
   height: 100%;
   height: 100dvh;
-  max-height: 100dvh;
   margin: 0 auto;
   padding: clamp(0.4rem, 1.2vh, 0.75rem) clamp(0.5rem, 2vw, 1rem);
   padding-top: max(clamp(0.4rem, 1.2vh, 0.75rem), env(safe-area-inset-top));
@@ -99,7 +99,7 @@ body {
   flex-direction: column;
   justify-content: space-between;
   gap: clamp(0.35rem, 1.1vh, 0.65rem);
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 /* Header */
@@ -353,19 +353,20 @@ header {
 .card-stage {
   flex: 1;
   width: 100%;
-  min-height: 0;
+  min-height: 280px;
   display: flex;
   align-items: center;
   justify-content: center;
-  touch-action: pan-y;
 }
 
 .perspective-box {
   width: 100%;
   height: 100%;
+  min-height: 280px;
   max-height: 480px;
   perspective: 1200px;
   cursor: pointer;
+  display: flex;
 }
 
 .perspective-box.hidden,
@@ -435,10 +436,12 @@ header {
   position: relative;
   width: 100%;
   height: 100%;
+  min-height: 280px;
   border-radius: 18px;
   transform-style: preserve-3d;
   transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
   will-change: transform;
+  touch-action: none;
 }
 
 .card-inner.flipped {
@@ -705,8 +708,11 @@ header {
   touch-action: manipulation;
 }
 
-.rate-btn:active {
-  transform: scale(0.96);
+.rate-btn:active,
+.rate-btn.btn-rated-active {
+  transform: scale(0.94);
+  filter: brightness(1.35);
+  box-shadow: 0 0 18px currentColor;
 }
 
 .rate-title {
@@ -1322,5 +1328,16 @@ header {
 @media (max-width: 400px) {
   .decks-group-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Hide desktop keyboard hints and legends on mobile and touch devices */
+@media (max-width: 640px), (hover: none) and (pointer: coarse) {
+  .rate-key-hint {
+    display: none !important;
+  }
+
+  .card-flip-prompt {
+    display: none !important;
   }
 }

@@ -342,16 +342,17 @@ streamline; usprawniać; optymalizować, upraszczać; B2; work; We must streamli
       </div>
 
       <div class="modal-body space-y-4">
-        <!-- Voice Selector -->
+        <!-- Voice Accent Selector -->
         <div class="setting-item">
-          <label for="select-tts-voice" class="setting-label">Głos lektora angielskiego</label>
+          <label for="select-tts-voice" class="setting-label">Akcent lektora</label>
           <div class="select-pill-wrapper w-full">
             <select id="select-tts-voice" class="select-pill w-full">
-              <option value="">Automatyczny / domyślny systemowy</option>
+              <option value="en-US" selected>🇺🇸 English (US) — Amerykański</option>
+              <option value="en-GB">🇬🇧 English (UK) — Brytyjski</option>
             </select>
             <svg class="select-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </div>
-          <p class="setting-hint">Obsługuje natywne głosy Web Speech API (w tym Google US/UK English na Chrome/Android oraz Siri na iOS).</p>
+          <p class="setting-hint">Domyślny akcent amerykański (US) z możliwością przełączenia na brytyjski (UK).</p>
         </div>
 
         <!-- Speech Rate -->
