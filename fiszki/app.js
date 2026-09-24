@@ -22,7 +22,7 @@
     tech: '💻 Technologia i IT',
     phrasals: '⚡ Phrasal Verbs',
     idioms: '🎯 Idiomy',
-    advanced: '💎 Zaawansowane C1',
+    advanced: '💎 Zaawansowane C1/C2',
     health: '🩺 Zdrowie i ciało',
     nature: '🌿 Natura i środowisko'
   };
@@ -1324,14 +1324,15 @@
     const levelSelect = document.getElementById('select-level-filter');
     if (!levelSelect) return;
 
-    const levels = ['all', 'A1', 'A2', 'B1', 'B2', 'C1'];
+    const levels = ['all', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
     const levelLabels = {
       all: 'Wszystkie poziomy',
       A1: 'A1 — Początkujący',
       A2: 'A2 — Podstawowy',
       B1: 'B1 — Średni',
       B2: 'B2 — Wyższy średni',
-      C1: 'C1 — Zaawansowany'
+      C1: 'C1 — Zaawansowany',
+      C2: 'C2 — Biegły'
     };
 
     const currentGroup = state.settings.activeGroup;
