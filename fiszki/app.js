@@ -23,7 +23,9 @@
     tech: '💻 Technologia i IT',
     phrasals: '⚡ Phrasal Verbs',
     idioms: '🎯 Idiomy',
-    advanced: '💎 Zaawansowane C1'
+    advanced: '💎 Zaawansowane C1',
+    health: '🩺 Zdrowie i ciało',
+    nature: '🌿 Natura i środowisko'
   };
 
   /* ==========================================================================

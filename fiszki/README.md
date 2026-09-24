@@ -51,7 +51,7 @@ Every flashcard contains:
 - Primary Polish translation (`pl`)
 - **Alternative Polish translations (`otherPl`)** displayed as interactive chip tags
 - CEFR level (`A1`, `A2`, `B1`, `B2`, `C1`)
-- Thematic group (`work`, `cooking`, `daily`, `travel`, `tech`, `phrasals`, `idioms`, `advanced`)
+- Thematic group (`work`, `cooking`, `daily`, `travel`, `tech`, `phrasals`, `idioms`, `advanced`, `health`, `nature`)
 - Part of speech (`pos`)
 - International Phonetic Alphabet (`ipa`) transcription
 - Context sentence in English (`exEn`) and Polish translation (`exPl`)
