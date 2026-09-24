@@ -92,6 +92,7 @@
   let timerInterval = null;
   let isRunning = false;
   let lastTickTime = 0;
+  let lastStatsSaveTime = 0;
 
   let todayDateStr = getLocalDateString();
   let storedDate = localStorage.getItem('kairos_stats_date');
@@ -130,7 +131,6 @@
     if (!autoStartNext) {
       if (currentBlock.type === 'focus') {
         totalFocusSecondsToday += Math.min(remainingTime, currentBlock.duration);
-        localStorage.setItem('kairos_today_focus_secs', totalFocusSecondsToday.toString());
         incrementFocusSessionsStat();
       }
       currentBlockIndex = (currentBlockIndex + 1) % activeSequence.length;
@@ -139,6 +139,8 @@
       remainingTime = totalTime;
       isRunning = false;
       targetEndTime = 0;
+      saveState();
+      saveStats();
       return;
     }
 
@@ -149,7 +151,6 @@
       iterations++;
       if (currentBlock.type === 'focus') {
         totalFocusSecondsToday += currentBlock.duration;
-        localStorage.setItem('kairos_today_focus_secs', totalFocusSecondsToday.toString());
         incrementFocusSessionsStat();
       }
 
@@ -173,11 +174,12 @@
       targetEndTime = 0;
       remainingTime = totalTime;
     }
+    saveState();
+    saveStats();
   }
 
   function incrementFocusSessionsStat() {
     totalSessionsToday++;
-    localStorage.setItem('kairos_today_sessions', totalSessionsToday.toString());
   }
 
   const timeDisplay = document.getElementById('timeDisplay');
@@ -283,7 +285,10 @@
     saveState();
   }
 
+  let cachedBlockBar = null;
+
   function renderTimeline() {
+    cachedBlockBar = null;
     if (!timelineTrack) return;
     timelineTrack.innerHTML = '';
     const seq = activeSequence;
@@ -328,13 +333,35 @@
     });
   }
 
+  function saveStats() {
+    try {
+      localStorage.setItem('kairos_today_focus_secs', totalFocusSecondsToday.toString());
+      localStorage.setItem('kairos_today_sessions', totalSessionsToday.toString());
+    } catch (e) {
+      console.warn('Could not save stats to localStorage', e);
+    }
+  }
+
   function saveState() {
-    localStorage.setItem('kairos_persist_session', persistSession ? 'true' : 'false');
-    localStorage.setItem('kairos_active_preset', currentPresetKey);
-    localStorage.setItem('kairos_active_block', currentBlockIndex.toString());
-    localStorage.setItem('kairos_remaining_time', remainingTime.toString());
-    localStorage.setItem('kairos_target_end_time', isRunning ? targetEndTime.toString() : '0');
-    localStorage.setItem('kairos_is_running', isRunning ? 'true' : 'false');
+    try {
+      if (!persistSession) {
+        localStorage.setItem('kairos_persist_session', 'false');
+        localStorage.removeItem('kairos_active_preset');
+        localStorage.removeItem('kairos_active_block');
+        localStorage.removeItem('kairos_remaining_time');
+        localStorage.removeItem('kairos_target_end_time');
+        localStorage.setItem('kairos_is_running', 'false');
+        return;
+      }
+      localStorage.setItem('kairos_persist_session', 'true');
+      localStorage.setItem('kairos_active_preset', currentPresetKey);
+      localStorage.setItem('kairos_active_block', currentBlockIndex.toString());
+      localStorage.setItem('kairos_remaining_time', remainingTime.toString());
+      localStorage.setItem('kairos_target_end_time', isRunning ? targetEndTime.toString() : '0');
+      localStorage.setItem('kairos_is_running', isRunning ? 'true' : 'false');
+    } catch (e) {
+      console.warn('Could not save state to localStorage', e);
+    }
   }
 
   function resumeAudioContext() {
@@ -386,10 +413,21 @@
       });
     }
 
-    window.addEventListener('beforeunload', saveState);
+    function flushOnLeave() {
+      if (isRunning && targetEndTime > 0) {
+        const now = Date.now();
+        remainingTime = Math.max(0, Math.ceil((targetEndTime - now) / 1000));
+      }
+      saveState();
+      saveStats();
+    }
+
+    window.addEventListener('beforeunload', flushOnLeave);
+    window.addEventListener('pagehide', flushOnLeave);
+
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
-        saveState();
+        flushOnLeave();
       } else if (document.visibilityState === 'visible' && isRunning && targetEndTime > 0) {
         const now = Date.now();
         if (now < targetEndTime) {
@@ -441,7 +479,9 @@
     }
 
     lastTickTime = now;
+    lastStatsSaveTime = now;
     saveState();
+    saveStats();
 
     if (timerInterval) clearInterval(timerInterval);
 
@@ -453,26 +493,31 @@
           const elapsedSecs = Math.floor(elapsedMs / 1000);
           totalFocusSecondsToday += elapsedSecs;
           lastTickTime += elapsedSecs * 1000;
-          localStorage.setItem('kairos_today_focus_secs', totalFocusSecondsToday.toString());
           updateStatsDisplay();
+
+          if (currentNow - lastStatsSaveTime >= 30000) {
+            lastStatsSaveTime = currentNow;
+            saveStats();
+          }
         }
 
-        remainingTime = Math.max(0, Math.ceil((targetEndTime - currentNow) / 1000));
-        updateDisplay();
-        saveState();
+        const newRemaining = Math.max(0, Math.ceil((targetEndTime - currentNow) / 1000));
+        if (newRemaining !== remainingTime) {
+          remainingTime = newRemaining;
+          updateDisplay();
+        }
       } else {
         if (currentBlock.type === 'focus' && lastTickTime > 0) {
           const finalSecs = Math.max(0, Math.floor((targetEndTime - lastTickTime) / 1000));
           if (finalSecs > 0) {
             totalFocusSecondsToday += finalSecs;
-            localStorage.setItem('kairos_today_focus_secs', totalFocusSecondsToday.toString());
           }
         }
         remainingTime = 0;
         updateDisplay();
         onBlockComplete();
       }
-    }, 250);
+    }, 500);
   }
 
   function pauseTimer() {
@@ -484,6 +529,7 @@
     targetEndTime = 0;
     toggleBtn.textContent = 'Start';
     saveState();
+    saveStats();
   }
 
   function resetCurrentClock() {
@@ -491,6 +537,7 @@
     remainingTime = totalTime;
     updateDisplay();
     saveState();
+    saveStats();
   }
 
   function advanceToNextBlock() {
@@ -513,6 +560,9 @@
 
     playBellSound(selectedBell);
     triggerTabBlinkNotification(finishedBlock);
+
+    saveState();
+    saveStats();
 
     if (autoStartNext) {
       startTimer(true);
@@ -635,29 +685,43 @@
     }
   }
 
+  let lastFormatted = '';
+  let lastDashOffset = -1;
+
   function updateDisplay() {
     const mins = Math.floor(remainingTime / 60);
     const secs = remainingTime % 60;
     const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
-    if (timeDisplay) {
-      timeDisplay.textContent = formatted;
+    if (formatted !== lastFormatted) {
+      lastFormatted = formatted;
+      if (timeDisplay) {
+        timeDisplay.textContent = formatted;
+      }
     }
 
     if (!tabBlinkTimer) {
-      document.title = `(${formatted}) Kairos · ${currentBlock.label}`;
+      const nextTitle = `(${formatted}) Kairos · ${currentBlock.label}`;
+      if (document.title !== nextTitle) {
+        document.title = nextTitle;
+      }
     }
 
     if (progressRing) {
       const progress = totalTime > 0 ? remainingTime / totalTime : 0;
-      const offset = CIRCLE_CIRCUMFERENCE * (1 - progress);
-      progressRing.style.strokeDashoffset = offset;
+      const offset = Math.round(CIRCLE_CIRCUMFERENCE * (1 - progress) * 10) / 10;
+      if (offset !== lastDashOffset) {
+        lastDashOffset = offset;
+        progressRing.style.strokeDashoffset = offset;
+      }
     }
 
-    const blockBar = document.getElementById('blockProgressBar');
-    if (blockBar) {
+    if (!cachedBlockBar || !cachedBlockBar.isConnected) {
+      cachedBlockBar = document.getElementById('blockProgressBar');
+    }
+    if (cachedBlockBar) {
       const blockPercent = totalTime > 0 ? ((totalTime - remainingTime) / totalTime) * 100 : 0;
-      blockBar.style.width = `${blockPercent}%`;
+      cachedBlockBar.style.width = `${blockPercent}%`;
     }
   }
 

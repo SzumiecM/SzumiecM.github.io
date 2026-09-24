@@ -48,6 +48,7 @@
   const btnUndo = document.getElementById('btn-undo');
   const btnErase = document.getElementById('btn-erase');
   const btnPencil = document.getElementById('btn-pencil');
+  const keypadEl = document.querySelector('.keypad');
   const diffButtons = document.querySelectorAll('.diff-btn');
   const numButtons = document.querySelectorAll('.num-btn');
   const rotaryOverlay = document.getElementById('rotary-overlay');
@@ -92,33 +93,57 @@
   }
 
   // --- Session Storage Helpers ---
+  let cachedSessions = null;
+  let saveSessionTimeout = null;
+
   function getStoredSessions() {
+    if (cachedSessions !== null) return cachedSessions;
     try {
       const data = localStorage.getItem(SESSIONS_STORAGE_KEY);
-      return data ? JSON.parse(data) : {};
+      cachedSessions = data ? JSON.parse(data) : {};
     } catch (e) {
-      return {};
+      cachedSessions = {};
     }
+    return cachedSessions;
   }
 
-  function saveCurrentSession() {
+  function updateSessionObject() {
+    const sessions = getStoredSessions();
+    sessions[difficulty] = {
+      puzzle: Array.from(puzzle),
+      board: Array.from(board),
+      solution: Array.from(solution),
+      notes: Array.from(notes),
+      timerSeconds,
+      history,
+      redoStack,
+      isCompleted
+    };
+    return sessions;
+  }
+
+  function flushCurrentSession() {
+    if (saveSessionTimeout) {
+      clearTimeout(saveSessionTimeout);
+      saveSessionTimeout = null;
+    }
     try {
-      const sessions = getStoredSessions();
-      sessions[difficulty] = {
-        puzzle: Array.from(puzzle),
-        board: Array.from(board),
-        solution: Array.from(solution),
-        notes: Array.from(notes),
-        timerSeconds,
-        history,
-        redoStack,
-        isCompleted
-      };
+      const sessions = updateSessionObject();
       localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
       localStorage.setItem(DIFFICULTY_STORAGE_KEY, difficulty);
     } catch (e) {
       console.warn('Could not save session to localStorage', e);
     }
+  }
+
+  function saveCurrentSession(immediate = false) {
+    if (immediate) {
+      flushCurrentSession();
+      return;
+    }
+    updateSessionObject();
+    if (saveSessionTimeout) clearTimeout(saveSessionTimeout);
+    saveSessionTimeout = setTimeout(flushCurrentSession, 400);
   }
 
   function loadStoredSession(diff) {
@@ -261,7 +286,7 @@
     board = new Uint8Array(puzzle);
     notes = new Uint16Array(81);
 
-    saveCurrentSession();
+    saveCurrentSession(true);
     renderFullBoard();
     updateKeypadCounts();
     startTimer();
@@ -293,7 +318,7 @@
     board = new Uint8Array(puzzle);
     notes = new Uint16Array(81);
 
-    saveCurrentSession();
+    saveCurrentSession(true);
     renderFullBoard();
     updateKeypadCounts();
     startTimer();
@@ -306,7 +331,7 @@
   function switchDifficulty(newDiff) {
     if (newDiff === difficulty) return;
 
-    saveCurrentSession();
+    saveCurrentSession(true);
     stopTimer();
 
     difficulty = newDiff;
@@ -591,7 +616,6 @@
   // --- Keypad Remaining Counts ---
   function updateKeypadCounts() {
     const isHardcore = assistLevel === 0;
-    const keypadEl = document.querySelector('.keypad');
     if (keypadEl) {
       keypadEl.classList.toggle('hide-counts', isHardcore);
     }
@@ -633,7 +657,7 @@
 
     isCompleted = true;
     stopTimer();
-    saveCurrentSession();
+    saveCurrentSession(true);
 
     victoryTimeEl.textContent = formatTime(timerSeconds);
     victoryDiffEl.textContent = SudokuAlgo.DIFFICULTY_CONFIG[difficulty].label;
@@ -1079,7 +1103,7 @@
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         stopTimer();
-        saveCurrentSession();
+        flushCurrentSession();
       } else if (!isCompleted) {
         startTimer();
       }
@@ -1087,7 +1111,10 @@
 
     // Save session on page unload
     window.addEventListener('beforeunload', () => {
-      saveCurrentSession();
+      flushCurrentSession();
+    });
+    window.addEventListener('pagehide', () => {
+      flushCurrentSession();
     });
   }
 
