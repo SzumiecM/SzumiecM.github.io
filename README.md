@@ -42,6 +42,7 @@
 | **🔍 Diff Tool** | Side-by-side and unified code diff comparator with live line statistics for additions and removals. | `Visual Diff Engine` · `Instant Render` · `Stats Bar` | [Launch Tool →](https://szumiecm.github.io/diff/) |
 | **⏳ Kairos** | Minimalist focus timer & timebox engine with procedural ambient sound synthesis and local statistics. | `Web Audio Synthesis` · `Procedural Noise` · `SVG Ring` | [Launch App →](https://szumiecm.github.io/kairos/) |
 | **🧩 Sudoku** | Zero-dependency client-side Sudoku engine with guaranteed solvability, rotary mobile touch dial, and keyboard shortcuts. | `Isomorphic Generation` · `MRV Bitmask Solver` · `Rotary Touch Dial` | [Launch App →](https://szumiecm.github.io/sudoku/) |
+| **🗂️ Fiszki** | Spaced repetition flashcards (Leitner 5-box) for EN ⇄ PL language acquisition with speech synthesis, audio controls, and touch gestures. | `SRS Leitner Engine` · `Web Speech API` · `Zero Dependencies` | [Launch App →](https://szumiecm.github.io/fiszki/) |
 
 ---
 

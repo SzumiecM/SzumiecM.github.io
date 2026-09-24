@@ -18,6 +18,8 @@
   --kairos-glow: rgba(245, 158, 11, 0.35);
   --sudoku-indigo: #6366f1;
   --sudoku-glow: rgba(99, 102, 241, 0.4);
+  --fiszki-emerald: #10b981;
+  --fiszki-glow: rgba(16, 185, 129, 0.4);
   
   --font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -227,6 +229,10 @@ html, body {
   box-shadow: 0 20px 40px -15px var(--sudoku-glow), 0 0 25px rgba(99, 102, 241, 0.15);
 }
 
+.card-fiszki:hover {
+  box-shadow: 0 20px 40px -15px var(--fiszki-glow), 0 0 25px rgba(16, 185, 129, 0.15);
+}
+
 .card-header {
   display: flex;
   align-items: center;
@@ -297,6 +303,12 @@ html, body {
   color: #818cf8;
   background: rgba(99, 102, 241, 0.12);
   border-color: rgba(99, 102, 241, 0.25);
+}
+
+.card-fiszki .tag-badge {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.25);
 }
 
 .card-body {

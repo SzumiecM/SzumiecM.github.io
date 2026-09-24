@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Fiszki — SRS Vocabulary Engine</title>
+  <meta name="description" content="Offline, zero-dependency client-side Spaced Repetition Flashcards engine with audio pronunciation, Leitner boxes, and custom deck support.">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data:;
+    connect-src 'self' https:;
+    form-action 'none';
+    media-src 'self' https: data: blob:;
+    object-src 'none';
+    base-uri 'none';
+  ">
+  <link rel="icon" href="logo.svg">
+  <link rel="preload" href="words.json" as="fetch" crossorigin="anonymous">
+  <link rel="preload" href="app.js" as="script">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <div class="bg-canvas">
+    <div class="bg-grid"></div>
+  </div>
+
+  <div class="app-container">
+
+    <!-- Header matching SzumiecM apps -->
+    <header>
+      <a href="../" class="brand" aria-label="Powrót do strony głównej SzumiecM">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="5" width="14" height="15" rx="2" stroke="#10b981" fill="none"></rect>
+            <path d="M8 5V3a1 1 0 0 1 1-1h11a2 2 0 0 1 2 2v13a1 1 0 0 1-1 1h-3" stroke="#34d399" opacity="0.6"></path>
+            <path d="M5 10h8" stroke="#10b981" stroke-width="1.5"></path>
+            <path d="M5 14h5" stroke="#10b981" stroke-width="1.5"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Fiszki</h1>
+          <span>SRS Vocabulary</span>
+        </div>
+      </a>
+
+      <div class="header-actions">
+        <!-- Direction Toggle: EN->PL or PL->EN -->
+        <button id="btn-toggle-direction" class="header-pill-btn" aria-label="Kierunek nauki" title="Zmień kierunek nauki: EN ➔ PL lub PL ➔ EN">
+          <span id="direction-label">EN ➔ PL</span>
+        </button>
+
+        <!-- Decks & Library Button -->
+        <button id="btn-open-decks" class="action-icon-btn" aria-label="Baza słówek i talie" title="Wybierz talię lub importuj słówka">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            <line x1="9" y1="7" x2="15" y2="7"></line>
+            <line x1="9" y1="11" x2="13" y2="11"></line>
+          </svg>
+        </button>
+
+        <!-- Settings Button -->
+        <button id="btn-open-settings" class="action-icon-btn" aria-label="Ustawienia głosu i sesji" title="Ustawienia głosu, szybkości i opcji">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Quick Filter & Deck Toolbar -->
+    <div class="deck-filter-bar">
+      <!-- Group Filter Dropdown -->
+      <div class="select-pill-wrapper">
+        <label for="select-group-filter" class="sr-only">Grupa słownictwa</label>
+        <select id="select-group-filter" class="select-pill" title="Filtruj wg grupy tematycznej">
+          <option value="all">Wszystkie grupy (ALL)</option>
+          <option value="work">💼 Praca i biznes</option>
+          <option value="cooking">🍳 Kuchnia i kulinaria</option>
+          <option value="daily">☕ Życie codzienne</option>
+          <option value="travel">✈️ Podróże i transport</option>
+          <option value="tech">💻 Technologia i IT</option>
+          <option value="phrasals">⚡ Phrasal Verbs</option>
+          <option value="idioms">🎯 Idiomy</option>
+          <option value="advanced">💎 Zaawansowane C1</option>
+        </select>
+        <svg class="select-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
+
+      <!-- Level Filter Dropdown -->
+      <div class="select-pill-wrapper">
+        <label for="select-level-filter" class="sr-only">Poziom zaawansowania</label>
+        <select id="select-level-filter" class="select-pill" title="Filtruj wg poziomu CEFR">
+          <option value="all">Wszystkie poziomy</option>
+          <option value="A1">A1 — Początkujący</option>
+          <option value="A2">A2 — Podstawowy</option>
+          <option value="B1">B1 — Średni</option>
+          <option value="B2">B2 — Wyższy średni</option>
+          <option value="C1">C1 — Zaawansowany</option>
+        </select>
+        <svg class="select-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
+
+      <!-- Queue Scope Button: All vs Due/Lapsed -->
+      <button id="btn-toggle-scope" class="scope-pill-btn" title="Przełącz: wszystkie słówka lub tylko do powtórki">
+        <span id="scope-pill-text">Wszystkie</span>
+      </button>
+    </div>
+
+    <!-- Session Progress Bar & Metrics -->
+    <div class="progress-section" aria-label="Postęp bieżącej sesji">
+      <div class="progress-info">
+        <div class="queue-status">
+          <span class="status-pulse-dot"></span>
+          <span>Pozostało w sesji: <strong id="queue-remaining-count">0</strong></span>
+        </div>
+        <div class="stats-mini">
+          <span class="streak-badge" title="Dobra passa">🔥 <span id="streak-counter">0</span></span>
+          <span id="progress-percent" class="percent-label">0%</span>
+        </div>
+      </div>
+      <div class="progress-track">
+        <div id="progress-bar-fill" class="progress-fill" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- Main Flashcard Perspective Container -->
+    <main class="card-stage" id="card-stage" aria-label="Fiszka interaktywna">
+      <!-- Empty State when filter yields 0 cards -->
+      <div id="card-empty-state" class="empty-state-card hidden">
+        <div class="empty-state-icon">🔍</div>
+        <h3 class="empty-state-title">Brak fiszek w tej kombinacji</h3>
+        <p class="empty-state-desc" id="empty-state-desc">Nie znaleziono słówek dla wybranej grupy i poziomu.</p>
+        <div class="empty-state-actions">
+          <button id="btn-empty-reset-level" class="btn-primary">Wszystkie poziomy</button>
+          <button id="btn-empty-reset-group" class="btn-secondary">Wszystkie grupy</button>
+        </div>
+      </div>
+
+      <!-- In-Stage Session Complete State -->
+      <div id="card-complete-state" class="empty-state-card hidden">
+        <div class="empty-state-icon">🎉</div>
+        <h3 class="empty-state-title">Sesja ukończona!</h3>
+        <p class="empty-state-desc">Wszystkie fiszki w tej sesji zostały powtórzone. Świetna robota!</p>
+        <div class="empty-state-actions">
+          <button id="btn-stage-restart-session" class="btn-primary">Nowa sesja</button>
+          <button id="btn-stage-review-lapsed" class="btn-secondary">Powtórz trudne</button>
+        </div>
+      </div>
+
+      <div class="perspective-box" id="perspective-box">
+        <div id="flashcard-inner" class="card-inner" role="button" tabindex="0" aria-label="Fiszka - kliknij lub naciśnij spację, aby obrócić">
+
+          <!-- CARD FRONT -->
+          <article class="card-face card-front">
+            <div class="card-face-header">
+              <div class="badges-row">
+                <span id="card-group-badge" class="meta-badge badge-group">Grupa</span>
+                <span id="card-level-badge" class="meta-badge badge-level">B2</span>
+                <span id="card-pos-badge" class="meta-badge badge-pos">noun</span>
+              </div>
+              <div class="card-actions-top">
+                <div class="leitner-dots" id="card-leitner-dots" title="Poziom pamięci (Leitner Box 1-5)">
+                  <span class="dot active"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </div>
+                <button id="btn-speak-front" class="sound-btn" aria-label="Odtwórz wymowę (R)" title="Odtwórz wymowę (Klawisz R)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="card-center">
+              <div id="card-front-word" class="primary-word">Word</div>
+              <div id="card-front-ipa" class="ipa-transcription">/wɜːd/</div>
+            </div>
+
+            <div class="card-context-box">
+              <p id="card-front-example" class="context-sentence">Example sentence</p>
+              <div class="card-flip-prompt">
+                <span>Kliknij lub wciśnij <kbd>Spacja</kbd>, aby obrócić</span>
+              </div>
+            </div>
+          </article>
+
+          <!-- CARD BACK -->
+          <article class="card-face card-back">
+            <div class="card-face-header">
+              <div class="badges-row">
+                <span class="meta-badge badge-translation">Tłumaczenie</span>
+                <span id="card-back-group-badge" class="meta-badge badge-group">Grupa</span>
+              </div>
+              <div class="card-actions-top">
+                <div class="leitner-dots" id="card-back-leitner-dots" title="Poziom opanowania">
+                  <span class="dot active"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </div>
+                <button id="btn-flip-back" class="sound-btn" aria-label="Obróć na przód" title="Wróć na przód fiszki">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                    <path d="M3 3v5h5"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="card-center">
+              <div id="card-back-primary" class="primary-word translation-text">Słowo</div>
+              
+              <!-- Alternative meanings chip list -->
+              <div class="other-meanings-container" id="other-meanings-container">
+                <span class="other-meanings-title">Inne znaczenia:</span>
+                <div id="card-other-meanings-list" class="other-meanings-chips">
+                  <!-- Chips injected via JS -->
+                </div>
+              </div>
+            </div>
+
+            <div class="card-context-box">
+              <p id="card-back-example" class="context-sentence pl-example">Przykładowe zdanie po polsku.</p>
+              <div class="card-flip-prompt">
+                <span>Oceń znajomość poniżej (1, 2 lub 3)</span>
+              </div>
+            </div>
+          </article>
+
+        </div>
+      </div>
+    </main>
+
+    <!-- Review Rating Buttons (Leitner 3-Level) -->
+    <nav class="rating-controls" aria-label="Ocena znajomości słówka">
+      <div class="rating-grid">
+        <!-- 1: Nie znam -->
+        <button id="btn-rate-1" class="rate-btn rate-btn-lapse" aria-label="1: Nie znam słówka">
+          <div class="rate-title">Nie znam</div>
+          <span class="rate-key-hint">Klawisz 1 · ◀</span>
+        </button>
+
+        <!-- 2: Średnio -->
+        <button id="btn-rate-2" class="rate-btn rate-btn-medium" aria-label="2: Średnio znam słówko">
+          <div class="rate-title">Średnio</div>
+          <span class="rate-key-hint">Klawisz 2 · ▼</span>
+        </button>
+
+        <!-- 3: Znam! -->
+        <button id="btn-rate-3" class="rate-btn rate-btn-known" aria-label="3: Znam słówko doskonale">
+          <div class="rate-title">Znam!</div>
+          <span class="rate-key-hint">Klawisz 3 · ▶</span>
+        </button>
+      </div>
+
+      <!-- Quick stats footer -->
+      <footer class="mastery-summary-bar">
+        <span>Znam: <strong id="stat-known" class="color-mastered">0</strong></span>
+        <span class="stat-sep">·</span>
+        <span>W trakcie: <strong id="stat-learning" class="color-learning">0</strong></span>
+        <span class="stat-sep">·</span>
+        <span>Do powtórki: <strong id="stat-lapsed" class="color-lapsed">0</strong></span>
+        <span class="stat-sep">·</span>
+        <span>Nowe: <strong id="stat-new" class="color-new">0</strong></span>
+      </footer>
+    </nav>
+
+  </div>
+
+  <!-- Decks, Vocabulary Library & Importer Modal -->
+  <div id="modal-decks" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-decks-title">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div>
+          <h2 id="modal-decks-title" class="modal-title">Baza słówek & Talie</h2>
+          <p class="modal-subtitle">Wybierz grupę słownictwa, importuj własną listę lub stwórz kopię</p>
+        </div>
+        <button id="btn-close-decks" class="modal-close-btn" aria-label="Zamknij okno">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Group Overview Cards -->
+        <section class="modal-section">
+          <h3 class="section-heading">Kategorie słownictwa</h3>
+          <div id="decks-group-grid" class="decks-group-grid">
+            <!-- Injected via JS -->
+          </div>
+        </section>
+
+        <!-- CSV / TSV Importer -->
+        <section class="modal-section import-box">
+          <div class="section-header-row">
+            <h3 class="section-heading">Własny import słówek (CSV / TSV)</h3>
+            <span class="format-hint">Format: en; pl; inne1, inne2; poziom; grupa; przykład en; przykład pl</span>
+          </div>
+          <textarea id="import-csv-textarea" rows="3" class="modal-textarea" placeholder="bargain; okazja cenowa; tani zakup, targować się; A2; daily; It was a real bargain.; To była prawdziwa okazja.
+streamline; usprawniać; optymalizować, upraszczać; B2; work; We must streamline the workflow.; Musimy usprawnić przepływ pracy."></textarea>
+          <div class="import-actions-row">
+            <input type="text" id="import-deck-name" class="modal-input" placeholder="Nazwa nowej talii (opcjonalnie)">
+            <button id="btn-submit-csv-import" class="btn-primary">Importuj fiszki</button>
+          </div>
+        </section>
+
+        <!-- Backup & Restore -->
+        <section class="modal-section backup-section">
+          <div class="backup-info">
+            <h4>Kopia zapasowa postępu</h4>
+            <p>Eksportuj cały postęp pamięciowy (Leitner boxes) i własne talie do pliku JSON.</p>
+          </div>
+          <div class="backup-buttons">
+            <button id="btn-export-backup" class="btn-secondary">Eksportuj JSON</button>
+            <label class="btn-secondary file-upload-label">
+              Przywróć JSON
+              <input type="file" id="file-restore-input" accept=".json" class="hidden-input">
+            </label>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="modal-settings" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-settings-title">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <h2 id="modal-settings-title" class="modal-title">Ustawienia Fiszki</h2>
+        <button id="btn-close-settings" class="modal-close-btn" aria-label="Zamknij okno">✕</button>
+      </div>
+
+      <div class="modal-body space-y-4">
+        <!-- Voice Selector -->
+        <div class="setting-item">
+          <label for="select-tts-voice" class="setting-label">Głos lektora angielskiego</label>
+          <div class="select-pill-wrapper w-full">
+            <select id="select-tts-voice" class="select-pill w-full">
+              <option value="">Automatyczny / domyślny systemowy</option>
+            </select>
+            <svg class="select-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <p class="setting-hint">Obsługuje natywne głosy Web Speech API (w tym Google US/UK English na Chrome/Android oraz Siri na iOS).</p>
+        </div>
+
+        <!-- Speech Rate -->
+        <div class="setting-item">
+          <div class="setting-header-between">
+            <label for="range-speech-rate" class="setting-label">Szybkość wymowy</label>
+            <span id="label-speech-rate" class="mono-badge">0.95x</span>
+          </div>
+          <input type="range" id="range-speech-rate" min="0.6" max="1.3" step="0.05" value="0.95" class="custom-range">
+        </div>
+
+        <!-- Auto-speak toggle -->
+        <div class="setting-item toggle-row">
+          <div>
+            <div class="setting-label">Automatyczna wymowa</div>
+            <div class="setting-hint">Odtwarzaj audio po odsłonięciu angielskiego słowa</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="check-auto-speak" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <!-- Max session size -->
+        <div class="setting-item">
+          <label for="select-session-size" class="setting-label">Rozmiar sesji (liczba fiszek)</label>
+          <div class="select-pill-wrapper w-full">
+            <select id="select-session-size" class="select-pill w-full">
+              <option value="15">Szybka sesja (15 fiszek)</option>
+              <option value="20" selected>Standardowa (20 fiszek)</option>
+              <option value="25">Rozszerzona (25 fiszek)</option>
+              <option value="50">Intensywna (50 fiszek)</option>
+              <option value="0">Wszystkie w danej kategorii</option>
+            </select>
+            <svg class="select-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+        </div>
+
+        <!-- Reset progress -->
+        <div class="setting-item pt-2 border-t">
+          <button id="btn-reset-current-progress" class="btn-danger w-full">
+            Zresetuj postęp dla aktualnego filtra
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Session Complete Modal -->
+  <div id="modal-session-complete" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-complete-title">
+    <div class="modal-card modal-sm text-center">
+      <div class="modal-header-close-only">
+        <button id="btn-close-complete" class="modal-close-btn" aria-label="Zamknij okno">✕</button>
+      </div>
+      <div class="celebration-icon">🎉</div>
+      <h2 id="modal-complete-title" class="modal-title">Świetna robota! Sesja ukończona!</h2>
+      <p class="modal-subtitle">Przejrzałeś wszystkie karty w wybranej puli. Twój mózg utrwalił nowe połączenia neuronowe.</p>
+
+      <div class="session-stats-grid">
+        <div class="stat-box">
+          <div id="stat-reviewed-total" class="stat-number color-primary">0</div>
+          <div class="stat-label">Powtórzeń</div>
+        </div>
+        <div class="stat-box">
+          <div id="stat-known-total" class="stat-number color-mastered">0</div>
+          <div class="stat-label">Znam</div>
+        </div>
+        <div class="stat-box">
+          <div id="stat-accuracy-rate" class="stat-number color-accent">0%</div>
+          <div class="stat-label">Skuteczność</div>
+        </div>
+      </div>
+
+      <div class="modal-actions-col">
+        <button id="btn-restart-session" class="btn-primary w-full">Rozpocznij nową sesję</button>
+        <button id="btn-review-lapsed-only" class="btn-secondary w-full">Powtórz tylko trudne słówka</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- In-house Toast Notification -->
+  <div id="toast" class="toast" role="alert" aria-live="polite"></div>
+
+  <!-- Scripts -->
+  <script src="app.js"></script>
+</body>
+
+</html>
