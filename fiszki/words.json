@@ -744,17 +744,17 @@
   {
     "id": "daily_09",
     "en": "grocery",
-    "pl": "artykuły spożywcze",
+    "pl": "sklep spożywczy",
     "otherPl": [
-      "zakupy spożywcze",
+      "artykuł spożywczy",
       "warzywniak"
     ],
     "level": "A1",
     "group": "daily",
     "pos": "noun",
     "ipa": "/ˈɡrəʊ.sər.i/",
-    "exEn": "I need to pick up some fresh groceries on my way home.",
-    "exPl": "Muszę kupić świeże artykuły spożywcze w drodze do domu."
+    "exEn": "I stopped by the local grocery to buy some fresh fruit.",
+    "exPl": "Zatrzymałem się w lokalnym sklepie spożywczym, aby kupić świeże owoce."
   },
   {
     "id": "daily_10",
@@ -2604,10 +2604,11 @@
   {
     "id": "health_14",
     "en": "remedy",
-    "pl": "lekarstwo",
+    "pl": "środek zaradczy",
     "otherPl": [
-      "środek zaradczy",
-      "domowy sposób leczenia"
+      "lekarstwo",
+      "domowy sposób leczenia",
+      "remedium"
     ],
     "level": "B2",
     "group": "health",
@@ -4692,7 +4693,7 @@
     "en": "sprinkle",
     "pl": "posypywać",
     "otherPl": [
-      "opróżyć",
+      "oprószyć",
       "posypka"
     ],
     "level": "B1",
@@ -5176,7 +5177,7 @@
     "pos": "verb",
     "ipa": "/ˈkɜː.dəl/",
     "exEn": "If you boil milk with lemon juice too abruptly, it will curdle.",
-    "exPl": "Jeśli nagle zagotujesz mleko z sokiem z cytryny, zważy się ono."
+    "exPl": "Jeśli nagle zagotujesz mleko z sokiem z cytryny, zwarzy się ono."
   },
   {
     "id": "cook_91",
@@ -7585,7 +7586,7 @@
     "pl": "idylliczny",
     "otherPl": [
       "sielski",
-      "rajki"
+      "rajski"
     ],
     "level": "C1",
     "group": "travel",
@@ -8606,10 +8607,11 @@
   {
     "id": "health_89",
     "en": "contagion",
-    "pl": "zakażenie",
+    "pl": "szerzenie się infekcji",
     "otherPl": [
       "zaraza",
-      "rozprzestrzenianie się infekcji"
+      "rozprzestrzenianie się zakażenia",
+      "czynnik zakaźny"
     ],
     "level": "B2",
     "group": "health",
@@ -9274,7 +9276,7 @@
     "pos": "noun",
     "ipa": "/ˈprəʊ.ses.ər/",
     "exEn": "The multicore ARM processor combines blazing speed with negligible energy draw.",
-    "exPl": "Wielordzeniowy procesor ARM łączy zawrotną prędkość z znikomym poborem energii."
+    "exPl": "Wielordzeniowy procesor ARM łączy zawrotną prędkość ze znikomym poborem energii."
   },
   {
     "id": "tech_56",
@@ -10562,7 +10564,7 @@
     "en": "erosion",
     "pl": "erozja",
     "otherPl": [
-      "wymywaniem lub wywiewanie gleby"
+      "wymywanie lub wywiewanie gleby"
     ],
     "level": "B2",
     "group": "nature",
@@ -11801,7 +11803,7 @@
     "group": "phrasals",
     "pos": "phrasal",
     "ipa": "/drɔː ʌp/",
-    "exEn": "Our legal council drew up a comprehensive non-disclosure contract.",
+    "exEn": "Our legal counsel drew up a comprehensive non-disclosure contract.",
     "exPl": "Nasz radca prawny sporządził kompleksową umowę o zachowaniu poufności."
   },
   {
@@ -12685,10 +12687,11 @@
   {
     "id": "idiom_54",
     "en": "jump the gun",
-    "pl": "wyszorować przed szereg",
+    "pl": "wyrywać się przed szereg",
     "otherPl": [
       "zrobić coś za wcześnie",
-      "pospieszyć się"
+      "pospieszyć się",
+      "wychodzić przed szereg"
     ],
     "level": "B2",
     "group": "idioms",
@@ -13077,7 +13080,7 @@
     "pos": "idiom",
     "ipa": "/bɜːn ðə ˈkæn.dəl æt bəʊθ endz/",
     "exEn": "Burning the candle at both ends eventually triggers acute physical exhaustion.",
-    "exPl": "Zaradzanie się pracą od świtu do nocy prowadzi ostatecznie do ostrego wyczerpania."
+    "exPl": "Zarzynanie się pracą od świtu do nocy prowadzi ostatecznie do ostrego wyczerpania."
   },
   {
     "id": "idiom_82",
