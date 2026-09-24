@@ -10,7 +10,6 @@
   /* ==========================================================================
      STORAGE KEYS & CONSTANTS
      ========================================================================== */
-  const STORAGE_KEY_PROGRESS = 'fiszki_progress_v1';
   const STORAGE_KEY_SETTINGS = 'fiszki_settings_v1';
   const STORAGE_KEY_CUSTOM_DECKS = 'fiszki_custom_decks_v1';
 
@@ -54,16 +53,269 @@
   };
 
   let availableVoices = [];
-  let saveProgressTimeout = null;
   let toastTimeout = null;
   let lastTouchTime = 0;
+
+  /* ==========================================================================
+     INDEXEDDB ASYNC STORAGE ENGINE (HIGH PERFORMANCE & ZERO MAIN-THREAD JANK)
+     ========================================================================== */
+  const DB_NAME = 'fiszki_idb_v1';
+  const DB_VERSION = 1;
+
+  const FiszkiDB = {
+    dbPromise: null,
+
+    async getDB() {
+      if (this.dbPromise) return this.dbPromise;
+      if (!('indexedDB' in window)) return null;
+
+      this.dbPromise = new Promise((resolve) => {
+        try {
+          const req = indexedDB.open(DB_NAME, DB_VERSION);
+
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('progress')) {
+              db.createObjectStore('progress', { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains('vocabulary')) {
+              const vocabStore = db.createObjectStore('vocabulary', { keyPath: 'id' });
+              vocabStore.createIndex('by_group', 'group', { unique: false });
+              vocabStore.createIndex('by_level', 'level', { unique: false });
+            }
+            if (!db.objectStoreNames.contains('meta')) {
+              db.createObjectStore('meta', { keyPath: 'key' });
+            }
+          };
+
+          req.onsuccess = (e) => {
+            resolve(e.target.result);
+          };
+
+          req.onerror = (e) => {
+            console.warn('IndexedDB unavailable, falling back to in-memory/localStorage', e);
+            resolve(null);
+          };
+        } catch (err) {
+          console.warn('IndexedDB open threw error', err);
+          resolve(null);
+        }
+      });
+
+      return this.dbPromise;
+    },
+
+    async getAllProgress() {
+      const db = await this.getDB();
+      if (!db) return null;
+
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction('progress', 'readonly');
+          const store = tx.objectStore('progress');
+          const req = store.getAll();
+          req.onsuccess = () => {
+            const res = {};
+            (req.result || []).forEach(item => {
+              if (item && item.id) {
+                const { id, ...data } = item;
+                res[id] = data;
+              }
+            });
+            resolve(res);
+          };
+          req.onerror = () => resolve(null);
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    },
+
+    async saveProgressBatch(itemsMap) {
+      const db = await this.getDB();
+      if (!db || itemsMap.size === 0) return false;
+
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction('progress', 'readwrite');
+          const store = tx.objectStore('progress');
+          itemsMap.forEach((prog, id) => {
+            store.put({ id, ...prog });
+          });
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    },
+
+    async clearAndReplaceProgress(allProgress) {
+      const db = await this.getDB();
+      if (!db) return false;
+
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction('progress', 'readwrite');
+          const store = tx.objectStore('progress');
+          store.clear();
+          Object.entries(allProgress).forEach(([id, prog]) => {
+            store.put({ id, ...prog });
+          });
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    },
+
+    async getCachedVocabulary() {
+      const db = await this.getDB();
+      if (!db) return null;
+
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction('vocabulary', 'readonly');
+          const store = tx.objectStore('vocabulary');
+          const req = store.getAll();
+          req.onsuccess = () => {
+            resolve(req.result && req.result.length > 0 ? req.result : null);
+          };
+          req.onerror = () => resolve(null);
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    },
+
+    async cacheVocabulary(wordsArray) {
+      const db = await this.getDB();
+      if (!db || !Array.isArray(wordsArray) || wordsArray.length === 0) return false;
+
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction('vocabulary', 'readwrite');
+          const store = tx.objectStore('vocabulary');
+          store.clear();
+          wordsArray.forEach(w => store.put(w));
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    }
+  };
+
+  /* ==========================================================================
+     DEBOUNCED BATCH PERSISTENCE & LIFECYCLE MANAGEMENT
+     ========================================================================== */
+  const pendingProgressUpdates = new Map();
+  let progressDebounceTimer = null;
+
+  function queueSaveProgress(cardId = null) {
+    if (cardId && state.cardProgress[cardId]) {
+      pendingProgressUpdates.set(cardId, state.cardProgress[cardId]);
+    }
+
+    if (progressDebounceTimer) {
+      clearTimeout(progressDebounceTimer);
+    }
+
+    // Debounce to batch multiple ratings into a single off-main-thread write (1200ms)
+    progressDebounceTimer = setTimeout(() => {
+      flushPendingProgress();
+    }, 1200);
+  }
+
+  async function flushPendingProgress() {
+    if (progressDebounceTimer) {
+      clearTimeout(progressDebounceTimer);
+      progressDebounceTimer = null;
+    }
+
+    if (pendingProgressUpdates.size === 0) return;
+
+    const toSave = new Map(pendingProgressUpdates);
+    pendingProgressUpdates.clear();
+
+    // Pure asynchronous write to IndexedDB (off-main-thread, zero jank)
+    await FiszkiDB.saveProgressBatch(toSave);
+  }
+
+  function saveProgressNow() {
+    if (progressDebounceTimer) {
+      clearTimeout(progressDebounceTimer);
+      progressDebounceTimer = null;
+    }
+
+    // If current card has progress, ensure it's in pending map
+    if (state.sessionQueue && state.sessionQueue[state.currentIndex]) {
+      const cId = state.sessionQueue[state.currentIndex].id;
+      if (state.cardProgress[cId]) {
+        pendingProgressUpdates.set(cId, state.cardProgress[cId]);
+      }
+    }
+
+    if (pendingProgressUpdates.size > 0) {
+      flushPendingProgress();
+    } else {
+      FiszkiDB.clearAndReplaceProgress(state.cardProgress);
+    }
+  }
+
+  // Mobile battery & state protection: Flush writes whenever app is hidden or backgrounded
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      flushPendingProgress();
+    }
+  });
+  window.addEventListener('pagehide', () => {
+    flushPendingProgress();
+  });
+
+  /* ==========================================================================
+     PRECOMPUTED VOCABULARY INDEX & LOOKUPS (O(1) SCALABILITY)
+     ========================================================================== */
+  const vocabIndex = {
+    byGroup: {},
+    byLevel: {},
+    cardsById: new Map()
+  };
+
+  function mergeAndIndexWords(baseWords) {
+    const customCards = [];
+    state.customDecks.forEach(deck => {
+      if (deck.cards && Array.isArray(deck.cards)) {
+        customCards.push(...deck.cards);
+      }
+    });
+
+    state.allWords = [...baseWords, ...customCards];
+
+    // Rebuild index
+    vocabIndex.byGroup = {};
+    vocabIndex.byLevel = {};
+    vocabIndex.cardsById.clear();
+
+    state.allWords.forEach(card => {
+      vocabIndex.cardsById.set(card.id, card);
+
+      if (!vocabIndex.byGroup[card.group]) vocabIndex.byGroup[card.group] = [];
+      vocabIndex.byGroup[card.group].push(card);
+
+      if (!vocabIndex.byLevel[card.level]) vocabIndex.byLevel[card.level] = [];
+      vocabIndex.byLevel[card.level].push(card);
+    });
+  }
 
   /* ==========================================================================
      INITIALIZATION & DATA LOADING
      ========================================================================== */
   async function init() {
     loadSettings();
-    loadProgress();
+    await loadProgress();
     loadCustomDecks();
     await loadVocabularyLibrary();
     initSpeechSynthesis();
@@ -73,6 +325,13 @@
     // Fresh session on page load/reload
     buildSessionQueue();
     renderCurrentCard();
+
+    // Register Service Worker for offline PWA & asset caching
+    if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      navigator.serviceWorker.register('sw.js').catch(err => {
+        console.warn('Service Worker registration skipped/failed', err);
+      });
+    }
   }
 
   function loadSettings() {
@@ -97,31 +356,18 @@
     }
   }
 
-  function loadProgress() {
+  async function loadProgress() {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_PROGRESS);
-      if (saved) {
-        state.cardProgress = JSON.parse(saved);
+      const idbProgress = await FiszkiDB.getAllProgress();
+      if (idbProgress && typeof idbProgress === 'object') {
+        state.cardProgress = idbProgress;
+      } else {
+        state.cardProgress = {};
       }
-    } catch (e) {
+    } catch (err) {
+      console.warn('IDB progress load error', err);
       state.cardProgress = {};
     }
-  }
-
-  function saveProgressNow() {
-    if (saveProgressTimeout) {
-      clearTimeout(saveProgressTimeout);
-      saveProgressTimeout = null;
-    }
-    try {
-      localStorage.setItem(STORAGE_KEY_PROGRESS, JSON.stringify(state.cardProgress));
-    } catch (e) {
-      console.warn('Failed saving progress to localStorage', e);
-    }
-  }
-
-  function queueSaveProgress() {
-    saveProgressNow();
   }
 
   function loadCustomDecks() {
@@ -143,40 +389,56 @@
     }
   }
 
-  // Load words from words.json as single source of truth
+  // Load words from IndexedDB cache immediately (0ms), revalidate via words.json in background
   async function loadVocabularyLibrary() {
     let baseWords = [];
 
+    // Step 1: 0ms Instant startup from IndexedDB cache
+    try {
+      const cached = await FiszkiDB.getCachedVocabulary();
+      if (cached && Array.isArray(cached) && cached.length > 0) {
+        baseWords = cached;
+        mergeAndIndexWords(baseWords);
+      }
+    } catch (e) {
+      console.warn('Failed reading cached vocabulary from IDB', e);
+    }
+
+    // Step 2: Fetch words.json (served via Service Worker or HTTP)
     try {
       const res = await fetch('words.json');
       if (res.ok) {
         const jsonWords = await res.json();
-        if (Array.isArray(jsonWords)) {
-          baseWords = jsonWords;
+        if (Array.isArray(jsonWords) && jsonWords.length > 0) {
+          // If fresh load or word count changed, update memory & IDB
+          if (baseWords.length === 0 || jsonWords.length !== baseWords.length) {
+            baseWords = jsonWords;
+            mergeAndIndexWords(baseWords);
+            FiszkiDB.cacheVocabulary(jsonWords);
+            buildSessionQueue();
+            renderCurrentCard();
+          }
         }
       } else {
         console.error('Failed to load words.json: HTTP ' + res.status);
       }
     } catch (err) {
-      console.error('Error fetching words.json:', err);
+      console.warn('Network fetch words.json failed, relying on offline cache', err);
     }
 
-    // Merge with any custom decks
-    const customCards = [];
-    state.customDecks.forEach(deck => {
-      if (deck.cards && Array.isArray(deck.cards)) {
-        customCards.push(...deck.cards);
-      }
-    });
-
-    state.allWords = [...baseWords, ...customCards];
+    if (state.allWords.length === 0) {
+      mergeAndIndexWords(baseWords);
+    }
   }
 
   /* ==========================================================================
      AUDIO / WEB SPEECH SYNTHESIS & US/UK ACCENTS
      ========================================================================== */
   function initSpeechSynthesis() {
-    if (!('speechSynthesis' in window)) return;
+    if (!('speechSynthesis' in window)) {
+      markTTSUnsupported();
+      return;
+    }
 
     const cacheVoices = () => {
       try {
@@ -188,6 +450,35 @@
 
     window.speechSynthesis.onvoiceschanged = cacheVoices;
     cacheVoices();
+  }
+
+  function markTTSUnsupported() {
+    const speakBtn = document.getElementById('btn-speak-front');
+    if (speakBtn) {
+      speakBtn.classList.add('tts-unsupported');
+      speakBtn.setAttribute('title', 'Wymowa audio (TTS) nie jest wspierana w tej przeglądarce');
+      speakBtn.setAttribute('aria-label', 'Wymowa audio niedostępna');
+      // Visual indicator: Muted speaker with an X
+      speakBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <line x1="23" y1="9" x2="17" y2="15"></line>
+          <line x1="17" y1="9" x2="23" y2="15"></line>
+        </svg>
+      `;
+    }
+
+    const voiceSelect = document.getElementById('select-tts-voice');
+    if (voiceSelect) {
+      voiceSelect.disabled = true;
+      voiceSelect.innerHTML = '<option value="">Wymowa audio niedostępna w tej przeglądarce</option>';
+    }
+
+    const autoSpeak = document.getElementById('check-auto-speak');
+    if (autoSpeak) {
+      autoSpeak.disabled = true;
+      autoSpeak.checked = false;
+    }
   }
 
   function getBestVoiceForAccent(accent) {
@@ -210,19 +501,17 @@
 
   function speakEnglishWord(textToSpeak, force = false) {
     if (!textToSpeak) return;
+
+    if (!('speechSynthesis' in window)) {
+      if (force) {
+        showToast('Wymowa audio (Web Speech API) nie jest wspierana w Twojej przeglądarce.');
+      }
+      return;
+    }
+
     if (!force && !state.settings.autoSpeak) return;
 
     const accent = state.settings.voiceAccent || 'en-US';
-
-    if (!('speechSynthesis' in window)) {
-      // Fallback via Google Translate TTS endpoint with chosen accent
-      try {
-        const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${accent}&q=${encodeURIComponent(textToSpeak)}`;
-        const audio = new Audio(audioUrl);
-        audio.play().catch(() => {});
-      } catch (e) {}
-      return;
-    }
 
     try {
       window.speechSynthesis.cancel(); // Stop previous utterance
@@ -650,7 +939,7 @@
     }
 
     state.cardProgress[currentCard.id] = prog;
-    saveProgressNow();
+    queueSaveProgress(currentCard.id);
 
     // Advance to next card (fixed session length - no reinserting)
     setCardFlipped(false);
@@ -711,20 +1000,31 @@
     if (!grid) return;
     grid.innerHTML = '';
 
+    // Single-pass O(N) accumulation across all groups
+    const stats = {
+      all: { count: state.allWords.length, mastered: 0 }
+    };
+    Object.keys(GROUP_NAMES).forEach(g => {
+      if (g !== 'all') stats[g] = { count: 0, mastered: 0 };
+    });
+
+    state.allWords.forEach(card => {
+      const p = state.cardProgress[card.id];
+      const isMastered = p && (p.lastRating === 3 || p.b >= 3);
+      if (isMastered) stats.all.mastered++;
+
+      if (stats[card.group]) {
+        stats[card.group].count++;
+        if (isMastered) stats[card.group].mastered++;
+      }
+    });
+
     const groups = Object.keys(GROUP_NAMES);
     groups.forEach(groupKey => {
       const isCurrent = state.settings.activeGroup === groupKey;
-      let count = 0;
-      let mastered = 0;
-
-      state.allWords.forEach(card => {
-        if (groupKey === 'all' || card.group === groupKey) {
-          count++;
-          const p = state.cardProgress[card.id];
-          if (p && (p.lastRating === 3 || p.b >= 3)) mastered++;
-        }
-      });
-
+      const groupStat = stats[groupKey] || { count: 0, mastered: 0 };
+      const count = groupStat.count;
+      const mastered = groupStat.mastered;
       const percent = count > 0 ? Math.round((mastered / count) * 100) : 0;
 
       const cardEl = document.createElement('div');
@@ -973,15 +1273,16 @@
     };
 
     const currentGroup = state.settings.activeGroup;
-    const groupWords = currentGroup === 'all'
-      ? state.allWords
-      : state.allWords.filter(c => c.group === currentGroup);
 
     levelSelect.innerHTML = '';
     levels.forEach(lvl => {
-      const count = lvl === 'all'
-        ? groupWords.length
-        : groupWords.filter(c => c.level === lvl).length;
+      let count = 0;
+      if (currentGroup === 'all') {
+        count = lvl === 'all' ? state.allWords.length : (vocabIndex.byLevel[lvl]?.length || 0);
+      } else {
+        const inGroup = vocabIndex.byGroup[currentGroup] || [];
+        count = lvl === 'all' ? inGroup.length : inGroup.filter(c => c.level === lvl).length;
+      }
 
       const opt = document.createElement('option');
       opt.value = lvl;
@@ -1077,6 +1378,10 @@
 
     document.getElementById('btn-speak-front').addEventListener('click', (e) => {
       e.stopPropagation();
+      if (!('speechSynthesis' in window)) {
+        showToast('Wymowa audio (Web Speech API) nie jest wspierana w Twojej przeglądarce.');
+        return;
+      }
       const card = state.sessionQueue[state.currentIndex];
       if (card) speakEnglishWord(card.en, true);
     });
@@ -1179,7 +1484,7 @@
           resetCount++;
         }
       });
-      queueSaveProgress();
+      saveProgressNow();
       buildSessionQueue();
       renderCurrentCard();
       document.getElementById('modal-settings').classList.add('hidden');

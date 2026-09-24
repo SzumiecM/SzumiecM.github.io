@@ -574,6 +574,19 @@ header {
   border-color: rgba(16, 185, 129, 0.3);
 }
 
+.sound-btn.tts-unsupported {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.sound-btn.tts-unsupported:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #ef4444;
+}
+
 .sound-btn svg {
   width: 16px;
   height: 16px;
