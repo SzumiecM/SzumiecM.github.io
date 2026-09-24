@@ -170,6 +170,40 @@
       });
     },
 
+    async getMeta(key) {
+      const db = await this.getDB();
+      if (!db) return null;
+
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction('meta', 'readonly');
+          const store = tx.objectStore('meta');
+          const req = store.get(key);
+          req.onsuccess = () => resolve(req.result ? req.result.value : null);
+          req.onerror = () => resolve(null);
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    },
+
+    async setMeta(key, value) {
+      const db = await this.getDB();
+      if (!db) return false;
+
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction('meta', 'readwrite');
+          const store = tx.objectStore('meta');
+          store.put({ key, value });
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    },
+
     async getCachedVocabulary() {
       const db = await this.getDB();
       if (!db) return null;
@@ -189,16 +223,20 @@
       });
     },
 
-    async cacheVocabulary(wordsArray) {
+    async cacheVocabulary(wordsArray, hash = null) {
       const db = await this.getDB();
       if (!db || !Array.isArray(wordsArray) || wordsArray.length === 0) return false;
 
       return new Promise((resolve) => {
         try {
-          const tx = db.transaction('vocabulary', 'readwrite');
+          const tx = db.transaction(['vocabulary', 'meta'], 'readwrite');
           const store = tx.objectStore('vocabulary');
           store.clear();
           wordsArray.forEach(w => store.put(w));
+          if (hash) {
+            const metaStore = tx.objectStore('meta');
+            metaStore.put({ key: 'vocab_hash', value: hash });
+          }
           tx.oncomplete = () => resolve(true);
           tx.onerror = () => resolve(false);
         } catch (e) {
@@ -317,12 +355,18 @@
     loadSettings();
     await loadProgress();
     loadCustomDecks();
-    await loadVocabularyLibrary();
+    await loadVocabularyLibrary(() => {
+      if (state.sessionStats.reviewed === 0) {
+        applySettingsToUI();
+        buildSessionQueue();
+        renderCurrentCard();
+      }
+    });
     initSpeechSynthesis();
     setupTouchGestures();
     attachEventListeners();
     applySettingsToUI();
-    // Fresh session on page load/reload
+    // Fresh session on page load/reload - built cleanly once
     buildSessionQueue();
     renderCurrentCard();
 
@@ -389,15 +433,29 @@
     }
   }
 
+  function computeHash(str) {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash.toString(36);
+  }
+
   // Load words from IndexedDB cache immediately (0ms), revalidate via words.json in background
-  async function loadVocabularyLibrary() {
+  async function loadVocabularyLibrary(onBackgroundUpdate = null) {
     let baseWords = [];
+    let cachedHash = null;
 
     // Step 1: 0ms Instant startup from IndexedDB cache
     try {
-      const cached = await FiszkiDB.getCachedVocabulary();
+      const [cached, metaHash] = await Promise.all([
+        FiszkiDB.getCachedVocabulary(),
+        FiszkiDB.getMeta('vocab_hash')
+      ]);
       if (cached && Array.isArray(cached) && cached.length > 0) {
         baseWords = cached;
+        cachedHash = metaHash;
         mergeAndIndexWords(baseWords);
       }
     } catch (e) {
@@ -406,17 +464,21 @@
 
     // Step 2: Fetch words.json (served via Service Worker or HTTP)
     try {
-      const res = await fetch('words.json');
+      const res = await fetch('words.json', { mode: 'cors' });
       if (res.ok) {
         const jsonWords = await res.json();
         if (Array.isArray(jsonWords) && jsonWords.length > 0) {
-          // If fresh load or word count changed, update memory & IDB
-          if (baseWords.length === 0 || jsonWords.length !== baseWords.length) {
+          const freshHash = computeHash(JSON.stringify(jsonWords));
+
+          // Robust invalidation: update if first load or if vocabulary contents changed
+          if (baseWords.length === 0 || freshHash !== cachedHash) {
             baseWords = jsonWords;
             mergeAndIndexWords(baseWords);
-            FiszkiDB.cacheVocabulary(jsonWords);
-            buildSessionQueue();
-            renderCurrentCard();
+            FiszkiDB.cacheVocabulary(jsonWords, freshHash);
+
+            if (typeof onBackgroundUpdate === 'function') {
+              onBackgroundUpdate();
+            }
           }
         }
       } else {
@@ -426,7 +488,7 @@
       console.warn('Network fetch words.json failed, relying on offline cache', err);
     }
 
-    if (state.allWords.length === 0) {
+    if (state.allWords.length === 0 && baseWords.length > 0) {
       mergeAndIndexWords(baseWords);
     }
   }

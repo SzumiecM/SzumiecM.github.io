@@ -3,7 +3,7 @@
  * Enables 100% offline spaced repetition flashcard practice with minimal battery consumption.
  */
 
-const CACHE_NAME = 'fiszki-cache-v1.0.2';
+const CACHE_NAME = 'fiszki-cache-v1.0.3';
 
 const STATIC_ASSETS = [
   './',
