@@ -188,6 +188,8 @@
     }
     updateDiffButtons();
 
+    initPuzzleWorker();
+
     if (loadStoredSession(difficulty)) {
       renderFullBoard();
       updateKeypadCounts();
@@ -262,6 +264,64 @@
     });
   }
 
+  // --- Background Puzzle Worker & Cache ---
+  let puzzleWorker = null;
+  const pendingWorkerRequests = new Map();
+  let nextWorkerRequestId = 1;
+  let currentGameRequestId = 0;
+
+  function initPuzzleWorker() {
+    if (typeof Worker !== 'undefined') {
+      try {
+        puzzleWorker = new Worker('worker.js');
+        puzzleWorker.onmessage = function (e) {
+          const { type, requestId, puzzle: puzzleData } = e.data || {};
+          if (type === 'PUZZLE_READY' && pendingWorkerRequests.has(requestId)) {
+            const cb = pendingWorkerRequests.get(requestId);
+            pendingWorkerRequests.delete(requestId);
+            cb(puzzleData);
+          }
+        };
+        puzzleWorker.onerror = function (err) {
+          console.warn('Puzzle worker error; falling back to main-thread generation', err);
+        };
+        // Warm up worker cache for active difficulty
+        puzzleWorker.postMessage({ type: 'PREFETCH', difficulty });
+      } catch (err) {
+        console.warn('Worker initialization failed; using sync fallback', err);
+        puzzleWorker = null;
+      }
+    }
+  }
+
+  function getNextPuzzle(targetDiff, callback) {
+    if (puzzleWorker) {
+      const reqId = nextWorkerRequestId++;
+      let handled = false;
+
+      // 400ms safety timeout: if worker doesn't answer immediately, fallback to sync generator
+      const timeoutId = setTimeout(() => {
+        if (!handled) {
+          handled = true;
+          pendingWorkerRequests.delete(reqId);
+          callback(SudokuAlgo.generatePuzzle(targetDiff, true));
+        }
+      }, 400);
+
+      pendingWorkerRequests.set(reqId, (pData) => {
+        if (!handled) {
+          handled = true;
+          clearTimeout(timeoutId);
+          callback(pData);
+        }
+      });
+
+      puzzleWorker.postMessage({ type: 'GET_PUZZLE', difficulty: targetDiff, requestId: reqId });
+    } else {
+      callback(SudokuAlgo.generatePuzzle(targetDiff, true));
+    }
+  }
+
   // --- Game Flow: New Game ---
   function startNewGame(askConfirm = true) {
     if (askConfirm && !isCompleted && board.some((v, i) => puzzle[i] === 0 && v !== 0)) {
@@ -280,19 +340,31 @@
     selectedIdx = null;
     victoryModal.classList.remove('active');
 
-    const generated = SudokuAlgo.generatePuzzle(difficulty);
-    puzzle = generated.puzzle;
-    solution = generated.solution;
-    board = new Uint8Array(puzzle);
-    notes = new Uint16Array(81);
+    const requestedDiff = difficulty;
+    const gameReqId = ++currentGameRequestId;
 
-    saveCurrentSession(true);
-    renderFullBoard();
-    updateKeypadCounts();
-    startTimer();
+    getNextPuzzle(requestedDiff, function (generated) {
+      // Discard if difficulty changed or a newer game was requested in the meantime
+      if (gameReqId !== currentGameRequestId || difficulty !== requestedDiff) {
+        return;
+      }
 
-    let firstEmpty = board.findIndex(v => v === 0);
-    selectCell(firstEmpty !== -1 ? firstEmpty : 0);
+      if (!generated || !generated.puzzle) {
+        generated = SudokuAlgo.generatePuzzle(requestedDiff, true);
+      }
+      puzzle = new Uint8Array(generated.puzzle);
+      solution = new Uint8Array(generated.solution);
+      board = new Uint8Array(puzzle);
+      notes = new Uint16Array(81);
+
+      saveCurrentSession(true);
+      renderFullBoard();
+      updateKeypadCounts();
+      startTimer();
+
+      let firstEmpty = board.findIndex(v => v === 0);
+      selectCell(firstEmpty !== -1 ? firstEmpty : 0);
+    });
   }
 
   // --- Game Flow: Reset Board to Original Clues ---
@@ -334,12 +406,17 @@
     saveCurrentSession(true);
     stopTimer();
 
+    currentGameRequestId++;
     difficulty = newDiff;
     localStorage.setItem(DIFFICULTY_STORAGE_KEY, difficulty);
     updateDiffButtons();
     selectedIdx = null;
     redoStack = [];
     victoryModal.classList.remove('active');
+
+    if (puzzleWorker) {
+      puzzleWorker.postMessage({ type: 'PREFETCH', difficulty: newDiff });
+    }
 
     if (loadStoredSession(difficulty)) {
       renderFullBoard();

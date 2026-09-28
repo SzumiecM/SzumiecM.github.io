@@ -10,6 +10,7 @@
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' 'unsafe-inline';
+    worker-src 'self' blob:;
     style-src 'self' 'unsafe-inline';
     img-src 'self' data:;
     connect-src 'none';
@@ -20,6 +21,7 @@
   ">
   <link rel="icon" href="logo.svg">
   <link rel="preload" href="algo.js" as="script">
+  <link rel="preload" href="worker.js" as="worker">
   <link rel="preload" href="app.js" as="script">
   <link rel="stylesheet" href="style.css">
 </head>

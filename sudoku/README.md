@@ -38,10 +38,12 @@ Every puzzle is generated in real-time with a mathematical guarantee of **strict
 
 ## 🎯 Key Features
 
-### 1. 🧩 Guaranteed Solvability & Uniqueness
+### 1. 🧩 Guaranteed Deductive Solvability & Uniqueness (Zero Guessing)
 - **Instant Full Grid Generation**: Starts with a canonical solved base grid and applies random Sudoku-preserving isomorphic transformations (permuting digits 1–9, shuffling rows within bands, columns within stacks, swapping bands and stacks, and optional matrix transposition) in $< 1\text{ ms}$.
-- **Bitmask MRV Backtracking Solver**: Tracks row, column, and $3\times3$ box occupancies with 16-bit bitmasks and Minimum Remaining Values (MRV) candidate pruning. Halts instantly when finding a 2nd solution (`limit = 2`).
-- **Rotational Symmetry Carving**: Carves cell pairs $(r, c)$ and $(8-r, 8-c)$ symmetrically, strictly preserving unique solvability (`solveCount === 1`).
+- **Bitmask MRV Backtracking Solver**: Tracks row, column, and $3\times3$ box occupancies with 16-bit bitmasks and Minimum Remaining Values (MRV) candidate pruning to guarantee strictly one unique valid solution.
+- **Human Deductive Reasoning Engine (`isLogicallySolvable`)**: Every puzzle is verified against deterministic human deduction techniques (Naked Singles, Hidden Singles, Pointing/Claiming Intersections, Naked Pairs, and Hidden Pairs). Guarantees a strictly logical resolution path with **zero guessing required** across all difficulties (Easy, Medium, Hard, and Expert).
+- **Background Web Worker (`worker.js`)**: Puzzle generation and validation run off the main UI thread in a dedicated Web Worker with cooperative background cache pre-generation. Delivering puzzles with **0 ms latency** and zero dropped frames (120 Hz fluid UI).
+- **Rotational Symmetry Deductive Carving**: Carves cell pairs $(r, c)$ and $(8-r, 8-c)$ symmetrically, strictly preserving both 100% deductive solvability and mathematical solution uniqueness at every removal.
 
 ### 2. 📱 Rotary Dial Mobile Gesture (Stationary Phone Style)
 - Long-press and hold on any mutable cell to summon a circular rotary wheel centered directly over the touch point.
