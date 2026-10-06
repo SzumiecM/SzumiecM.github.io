@@ -2355,6 +2355,24 @@
     setTimeout(resizeViewport, 150);
   }
 
+  function cancelAiming() {
+    if (State.isAiming) {
+      if (State.pointerId !== null) {
+        try {
+          if (dom.canvas.hasPointerCapture && dom.canvas.hasPointerCapture(State.pointerId)) {
+            dom.canvas.releasePointerCapture(State.pointerId);
+          }
+        } catch (err) { }
+      }
+      State.isAiming = false;
+      State.pointerId = null;
+      ball.x = ball.originX;
+      ball.y = ball.originY;
+      State.phase = 'IDLE';
+      wakeGameLoop();
+    }
+  }
+
   // ==========================================
   // 11. LIFECYCLE, POWER & BATTERY EFFICIENCY
   // ==========================================
@@ -2362,6 +2380,7 @@
     // 1. Visibility change: pause completely when tab in background
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
+        cancelAiming();
         isRunning = false;
         if (rafId) {
           cancelAnimationFrame(rafId);
@@ -2382,7 +2401,10 @@
       }
     });
 
-    // 2. Storage write flush before unload
+    // 2. Window blur & pointer recovery when switching apps/windows
+    window.addEventListener('blur', cancelAiming);
+
+    // 3. Storage write flush before unload
     window.addEventListener('beforeunload', flushStateToStorage);
     window.addEventListener('pagehide', flushStateToStorage);
   }
@@ -2402,6 +2424,7 @@
     } catch (err) { }
     dom.canvas.addEventListener('pointerup', onPointerUp, { passive: false });
     dom.canvas.addEventListener('pointercancel', onPointerCancel, { passive: false });
+    dom.canvas.addEventListener('lostpointercapture', cancelAiming);
     window.addEventListener('pointerup', onPointerUp, { passive: true });
     window.addEventListener('pointercancel', onPointerCancel, { passive: true });
     window.addEventListener('scroll', updateCanvasRect, { passive: true });
