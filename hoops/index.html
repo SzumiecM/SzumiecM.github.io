@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Hoops — 2D Arcade Basketball</title>
+  <meta name="description" content="Zero-dependency, battery-efficient 2D arcade basketball game with predictive slingshot physics, ball skins, and streak combos.">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data:;
+    connect-src 'none';
+    form-action 'none';
+    media-src 'none';
+    object-src 'none';
+    base-uri 'none';
+  ">
+  <link rel="icon" href="logo.svg">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0b1320">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preload" href="game.js" as="script">
+</head>
+
+<body>
+
+  <!-- Dynamic streak gradient container (handled via CSS custom properties for 0 GPU redraw cost) -->
+  <div class="game-wrapper" id="gameWrapper">
+
+    <!-- Minimalist HUD Header -->
+    <header class="hud-header">
+      <a href="../" class="brand" aria-label="SzumiecM Home">
+        <div class="brand-icon">
+          <svg viewBox="0 0 32 32" fill="none" stroke="#ea580c" stroke-width="2">
+            <circle cx="16" cy="16" r="13" stroke="#ea580c" />
+            <path d="M3 16h26M16 3v26" stroke="#ea580c" />
+            <path d="M7 6.5C12 11 12 21 7 25.5M25 6.5C20 11 20 21 25 25.5" stroke="#ea580c" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Hoops</h1>
+          <span>2D Arcade</span>
+        </div>
+      </a>
+
+      <!-- Streak & Milestones Dashboard -->
+      <div class="stats-bar">
+        <div class="stat-pill streak-pill" id="hudStreakPill" title="Consecutive Baskets Streak">
+          <span class="streak-flame" id="streakFlame" aria-hidden="true">🔥</span>
+          <span class="stat-label">STREAK</span>
+          <span class="stat-value" id="hudStreak">0</span>
+          <span class="tier-badge" id="hudTierBadge">ROOKIE</span>
+        </div>
+
+        <div class="stat-pill best-pill" title="Personal Record Consecutive Streak">
+          <span class="stat-label">BEST STREAK</span>
+          <span class="stat-value" id="hudBestStreak">0</span>
+        </div>
+
+        <div class="stat-pill total-pill" title="Total Career Baskets Scored">
+          <span class="stat-label">TOTAL</span>
+          <span class="stat-value" id="hudTotalBaskets">0</span>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="header-actions">
+        <!-- Settings Modal Trigger -->
+        <button id="btnSettings" class="icon-btn" aria-label="Game Settings" title="Game Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+
+        <!-- Fullscreen Toggle Button -->
+        <button id="btnFullscreen" class="icon-btn" aria-label="Toggle Fullscreen" title="Toggle Fullscreen (Android/Desktop)">
+          <svg id="iconFsEnter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+          </svg>
+          <svg id="iconFsExit" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>
+          </svg>
+        </button>
+
+        <!-- Ball Skin Picker Trigger -->
+        <button id="btnSkins" class="icon-btn" aria-label="Ball Skins" title="Choose Ball Skin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+            <path d="M2 12h20"></path>
+          </svg>
+        </button>
+
+        <!-- Achievements Modal Trigger -->
+        <button id="btnAchievements" class="icon-btn" aria-label="Achievements" title="Achievements">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+            <path d="M4 22h16"></path>
+            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Zen Mode Floating Pill (active in fullscreen) -->
+    <aside class="zen-pill hidden" id="zenPill" aria-label="Zen Mode Controls">
+      <div class="zen-streak" id="zenStreakWrap" title="Consecutive Baskets Streak">
+        <span class="zen-flame" aria-hidden="true">🔥</span>
+        <span class="zen-count" id="zenStreak">0</span>
+      </div>
+      <button id="zenBtnMenu" class="zen-btn" aria-label="Toggle Full Menu" title="Toggle Menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="1.5"></circle>
+          <circle cx="19" cy="12" r="1.5"></circle>
+          <circle cx="5" cy="12" r="1.5"></circle>
+        </svg>
+      </button>
+      <button id="zenBtnExit" class="zen-btn" aria-label="Exit Fullscreen" title="Exit Fullscreen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>
+        </svg>
+      </button>
+    </aside>
+
+    <!-- Main Canvas Viewport -->
+    <main class="canvas-container" id="canvasContainer">
+      <canvas id="gameCanvas" aria-label="Basketball Game Canvas"></canvas>
+
+      <!-- Onscreen Aim Tutorial Hint (fades out after first drag) -->
+      <div class="aim-hint" id="aimHint">
+        <div class="aim-hint-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="19" x2="12" y2="5"></line>
+            <polyline points="5 12 12 5 19 12"></polyline>
+          </svg>
+        </div>
+        <span>Drag & Pull back to aim • Release to shoot</span>
+      </div>
+    </main>
+
+    <!-- Slide-Down Achievement Toast Notification -->
+    <div class="achievement-toast" id="achievementToast" role="alert" aria-live="polite">
+      <div class="toast-trophy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+          <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+          <path d="M4 22h16"></path>
+          <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+        </svg>
+      </div>
+      <div class="toast-content">
+        <div class="toast-tag">ACHIEVEMENT UNLOCKED</div>
+        <div class="toast-title" id="toastTitle">Nothing But Net</div>
+        <div class="toast-reward" id="toastReward">Unlocked: Watermelon Skin</div>
+      </div>
+    </div>
+
+    <!-- Game Settings Modal Dialog -->
+    <dialog class="modal-dialog" id="settingsModal" aria-labelledby="settingsModalTitle">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 id="settingsModalTitle">Settings</h2>
+          <button class="modal-close-btn" id="closeSettingsBtn" aria-label="Close dialog">✕</button>
+        </div>
+        <p class="modal-desc">Configure shooting orientation and audio preferences.</p>
+
+        <div class="settings-sections">
+          <!-- Shooting Orientation Layout -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Shooting Layout</span>
+              <span class="setting-subtitle">Adjust hoop side for your dominant shooting hand</span>
+            </div>
+            <div class="layout-toggle-group">
+              <button type="button" class="layout-btn active" id="btnLayoutLeft" data-side="left">
+                <span class="layout-emoji">🏀 👈</span>
+                <div class="layout-labels">
+                  <span class="layout-name">Right Handed</span>
+                  <span class="layout-detail">Hoop on Left (RTL)</span>
+                </div>
+              </button>
+              <button type="button" class="layout-btn" id="btnLayoutRight" data-side="right">
+                <span class="layout-emoji">👉 🏀</span>
+                <div class="layout-labels">
+                  <span class="layout-name">Left Handed</span>
+                  <span class="layout-detail">Hoop on Right (LTR)</span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Sound Effects Toggle -->
+          <div class="setting-item setting-row">
+            <div class="setting-info">
+              <span class="setting-title">Sound Effects</span>
+              <span class="setting-subtitle">Rim clanks, swishes, and floor bounces</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggleSound" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <!-- Fullscreen Mode Toggle -->
+          <div class="setting-item setting-row">
+            <div class="setting-info">
+              <span class="setting-title">Fullscreen Mode</span>
+              <span class="setting-subtitle">Maximize window & hide browser bars (ideal for Android)</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggleFullscreen">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-primary" id="btnCloseSettings">Done</button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Ball Skins Modal Dialog -->
+    <dialog class="modal-dialog" id="skinsModal" aria-labelledby="skinsModalTitle">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 id="skinsModalTitle">Ball Locker</h2>
+          <button class="modal-close-btn" id="closeSkinsBtn" aria-label="Close dialog">✕</button>
+        </div>
+        <p class="modal-desc">Unlock custom procedural ball skins by completing in-game feats.</p>
+        
+        <div class="skins-grid" id="skinsGrid">
+          <!-- Populated dynamically via JS -->
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-primary" id="btnEquipSkin">Done</button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Achievements Modal Dialog -->
+    <dialog class="modal-dialog" id="achievementsModal" aria-labelledby="achievementsModalTitle">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 id="achievementsModalTitle">Hall of Fame</h2>
+          <button class="modal-close-btn" id="closeAchievementsBtn" aria-label="Close dialog">✕</button>
+        </div>
+        <p class="modal-desc">Track your shooting milestones and lifetime badges.</p>
+        
+        <div class="achievements-list" id="achievementsList">
+          <!-- Populated dynamically via JS -->
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-primary" id="btnCloseAchievements">Close</button>
+        </div>
+      </div>
+    </dialog>
+
+  </div>
+
+  <script src="game.js"></script>
+</body>
+
+</html>

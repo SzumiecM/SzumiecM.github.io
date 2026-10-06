@@ -20,6 +20,8 @@
   --sudoku-glow: rgba(99, 102, 241, 0.4);
   --fiszki-emerald: #10b981;
   --fiszki-glow: rgba(16, 185, 129, 0.4);
+  --hoops-orange: #ea580c;
+  --hoops-glow: rgba(234, 88, 12, 0.4);
   
   --font-stack: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -231,6 +233,10 @@ html, body {
 
 .card-fiszki:hover {
   box-shadow: 0 20px 40px -15px var(--fiszki-glow), 0 0 25px rgba(16, 185, 129, 0.15);
+}
+
+.card-hoops:hover {
+  box-shadow: 0 20px 40px -15px var(--hoops-glow), 0 0 25px rgba(234, 88, 12, 0.15);
 }
 
 .card-header {
