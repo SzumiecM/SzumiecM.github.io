@@ -500,9 +500,22 @@
       dom.streakPill.classList.remove('streak-active', 'on-fire');
     }
 
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || State.isPseudoFullscreen);
     if (dom.wrapper) {
-      const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || State.isPseudoFullscreen);
       dom.wrapper.className = `game-wrapper tier-${tier.id}${isFs ? ' fullscreen-mode' : ''}`;
+    }
+
+    if (dom.iconFsEnter && dom.iconFsExit) {
+      dom.iconFsEnter.classList.toggle('hidden', isFs);
+      dom.iconFsExit.classList.toggle('hidden', !isFs);
+    }
+    if (dom.toggleFullscreen) {
+      dom.toggleFullscreen.checked = isFs;
+    }
+    if (dom.zenPill) {
+      dom.zenPill.classList.toggle('hidden', !isFs);
+      dom.zenPill.classList.toggle('hoop-left', State.hoopSide === 'left');
+      dom.zenPill.classList.toggle('hoop-right', State.hoopSide === 'right');
     }
 
     if (dom.toggleSound) {
@@ -512,7 +525,6 @@
       dom.btnLayoutLeft.classList.toggle('active', State.hoopSide === 'left');
       dom.btnLayoutRight.classList.toggle('active', State.hoopSide === 'right');
     }
-    updateFullscreenUI();
   }
 
   // Toast Queue for Achievements
@@ -655,11 +667,21 @@
   }
 
   // Responsive Court Recomputation
-  function resizeViewport() {
+  function resizeViewport(force = false) {
     const rect = dom.canvas.parentElement.getBoundingClientRect();
-    width = rect.width;
-    height = rect.height;
-    dpr = Math.min(window.devicePixelRatio || 1, 2.0);
+    const newWidth = Math.floor(rect.width);
+    const newHeight = Math.floor(rect.height);
+    const newDpr = Math.min(window.devicePixelRatio || 1, 2.0);
+
+    // Prevent redundant canvas blanking, buffer rebuilds, and hoop jitter
+    if (!force && newWidth === width && newHeight === height && Math.abs(newDpr - dpr) < 0.001) {
+      updateCanvasRect();
+      return;
+    }
+
+    width = newWidth;
+    height = newHeight;
+    dpr = newDpr;
 
     dom.canvas.width = Math.floor(width * dpr);
     dom.canvas.height = Math.floor(height * dpr);
@@ -2331,6 +2353,7 @@
     }
   }
 
+  let lastFullscreenState = null;
   function updateFullscreenUI() {
     const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || State.isPseudoFullscreen);
     if (dom.iconFsEnter && dom.iconFsExit) {
@@ -2352,7 +2375,10 @@
     if (!isFs && dom.hudHeader) {
       dom.hudHeader.classList.remove('menu-open');
     }
-    setTimeout(resizeViewport, 150);
+    if (lastFullscreenState !== isFs) {
+      lastFullscreenState = isFs;
+      setTimeout(() => resizeViewport(true), 150);
+    }
   }
 
   function cancelAiming() {
