@@ -870,7 +870,7 @@
     }
 
     // Ignore clicks on header action buttons, modals, modal overlays, or zen pill
-    if (e.target && e.target.closest && e.target.closest('button, .modal, .modal-overlay, .stat-pill, .icon-btn, .zen-pill')) {
+    if (e.target && e.target.closest && e.target.closest('button, .modal, .modal-overlay, .stat-pill, .icon-btn, .zen-pill, .hud-header')) {
       return;
     }
 

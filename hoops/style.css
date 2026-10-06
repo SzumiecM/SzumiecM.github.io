@@ -119,7 +119,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 18px;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) calc(14px + env(safe-area-inset-right, 0px)) 10px calc(14px + env(safe-area-inset-left, 0px));
   background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -155,7 +158,7 @@ body {
 /* Zen Mode Floating Pill (active in fullscreen) */
 .zen-pill {
   position: absolute;
-  top: 12px;
+  top: calc(12px + env(safe-area-inset-top, 0px));
   z-index: 40;
   display: flex;
   align-items: center;
@@ -178,12 +181,12 @@ body {
 }
 
 .zen-pill.hoop-left {
-  right: 16px;
+  right: calc(16px + env(safe-area-inset-right, 0px));
   left: auto;
 }
 
 .zen-pill.hoop-right {
-  left: 16px;
+  left: calc(16px + env(safe-area-inset-left, 0px));
   right: auto;
 }
 
@@ -988,36 +991,109 @@ body {
 /* Mobile Responsive Optimization */
 @media (max-width: 600px) {
   .hud-header {
-    padding: 8px 12px;
-    gap: 8px;
+    padding: calc(6px + env(safe-area-inset-top, 0px)) calc(8px + env(safe-area-inset-right, 0px)) 6px calc(8px + env(safe-area-inset-left, 0px));
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
   }
 
-  .brand-text span {
+  .brand {
+    gap: 0;
+  }
+
+  .brand-text {
     display: none;
   }
 
+  .brand-icon {
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+    border-radius: 8px;
+  }
+
+  .stats-bar {
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+  }
+
   .stat-pill {
-    padding: 5px 8px;
-    font-size: 0.75rem;
+    padding: 4px 7px;
+    font-size: 0.74rem;
+    gap: 4px;
+  }
+
+  .stat-label {
+    display: none;
+  }
+
+  .streak-pill {
+    padding: 4px 6px;
+  }
+
+  .best-pill .stat-value::before {
+    content: 'BEST: ';
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    font-weight: 700;
   }
 
   .total-pill {
     display: none;
   }
 
+  .header-actions {
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
   .icon-btn {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
   }
 
   .icon-btn svg {
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
   }
 
   .aim-hint {
     font-size: 0.725rem;
     padding: 6px 14px;
     bottom: 16px;
+  }
+}
+
+@media (max-width: 380px) {
+  .hud-header {
+    padding: calc(4px + env(safe-area-inset-top, 0px)) calc(5px + env(safe-area-inset-right, 0px)) 4px calc(5px + env(safe-area-inset-left, 0px));
+    gap: 4px;
+  }
+
+  .header-actions {
+    gap: 4px;
+  }
+
+  .icon-btn {
+    width: 29px;
+    height: 29px;
+    border-radius: 7px;
+  }
+
+  .icon-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .stat-pill {
+    padding: 3px 5px;
+    font-size: 0.69rem;
+  }
+
+  .tier-badge {
+    display: none;
   }
 }
