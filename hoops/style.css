@@ -76,9 +76,40 @@ body {
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
-  transition: background 0.15s ease-out;
+  transition: background 0.75s ease-out;
   overflow-x: hidden;
   overflow-y: visible;
+}
+
+.game-wrapper.fullscreen-mode {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* GPU-composited Tier Atmosphere Transitions (zero per-frame style recalculation) */
+.game-wrapper.tier-rookie {
+  --bg-top: #1e293b;
+  --bg-bottom: #0f172a;
+}
+
+.game-wrapper.tier-heating {
+  --bg-top: #065f46;
+  --bg-bottom: #022c22;
+}
+
+.game-wrapper.tier-sharp {
+  --bg-top: #581c87;
+  --bg-bottom: #1e1b4b;
+}
+
+.game-wrapper.tier-fire {
+  --bg-top: #7c2d12;
+  --bg-bottom: #450a0a;
+}
+
+.game-wrapper.tier-legend {
+  --bg-top: #78350f;
+  --bg-bottom: #1c1917;
 }
 
 /* HUD Header */
@@ -591,6 +622,8 @@ body {
   gap: 16px;
   max-height: 85vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-header {

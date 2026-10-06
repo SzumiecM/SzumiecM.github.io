@@ -157,6 +157,7 @@
     streak: 0,
     sessionCleanShots: 0,
     isDirtyStorage: false,
+    isPseudoFullscreen: false,
 
     // Game lifecycle states: 'SPAWNING' | 'IDLE' | 'AIMING' | 'IN_FLIGHT' | 'RESOLVING'
     phase: 'IDLE',
@@ -174,6 +175,7 @@
       backboardHits: 0,
       scored: false,
       isClean: false,
+      enteredFromBelow: false,
       distanceFeet: 22,
       zoneName: '3-POINTER',
       zoneColor: '#10b981'
@@ -194,17 +196,49 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        State.bestStreak = parsed.bestStreak || parsed.highScore || 0;
-        State.lifetimeBaskets = parsed.lifetimeBaskets || 0;
-        State.lifetimeCleanShots = parsed.lifetimeCleanShots || parsed.lifetimeSwishes || 0;
-        State.equippedSkin = parsed.equippedSkin || 'classic';
-        State.unlockedSkins = parsed.unlockedSkins || { classic: true };
-        State.achievements = parsed.achievements || {};
-        State.isMuted = !!parsed.isMuted;
-        State.hoopSide = parsed.hoopSide === 'right' ? 'right' : 'left';
+        if (parsed && typeof parsed === 'object') {
+          const best = parsed.bestStreak ?? parsed.highScore;
+          if (typeof best === 'number' && Number.isFinite(best)) {
+            State.bestStreak = Math.max(0, Math.floor(best));
+          }
+          if (typeof parsed.lifetimeBaskets === 'number' && Number.isFinite(parsed.lifetimeBaskets)) {
+            State.lifetimeBaskets = Math.max(0, Math.floor(parsed.lifetimeBaskets));
+          }
+          const clean = parsed.lifetimeCleanShots ?? parsed.lifetimeSwishes;
+          if (typeof clean === 'number' && Number.isFinite(clean)) {
+            State.lifetimeCleanShots = Math.max(0, Math.floor(clean));
+          }
+          if (typeof parsed.equippedSkin === 'string' && BALL_SKINS.some(s => s.id === parsed.equippedSkin)) {
+            State.equippedSkin = parsed.equippedSkin;
+          }
+          if (parsed.unlockedSkins && typeof parsed.unlockedSkins === 'object' && !Array.isArray(parsed.unlockedSkins)) {
+            BALL_SKINS.forEach(skin => {
+              if (parsed.unlockedSkins[skin.id] === true) {
+                State.unlockedSkins[skin.id] = true;
+              }
+            });
+          }
+          if (parsed.achievements && typeof parsed.achievements === 'object' && !Array.isArray(parsed.achievements)) {
+            ACHIEVEMENTS_CATALOG.forEach(ach => {
+              if (parsed.achievements[ach.id]) {
+                State.achievements[ach.id] = parsed.achievements[ach.id];
+                if (ach.skinReward) {
+                  State.unlockedSkins[ach.skinReward] = true;
+                }
+              }
+            });
+          }
+          State.isMuted = !!parsed.isMuted;
+          State.hoopSide = parsed.hoopSide === 'right' ? 'right' : 'left';
+        }
       }
     } catch (e) {
       // Storage unavailable or disabled; keep defaults
+    }
+    // Always guarantee classic skin is unlocked and valid
+    State.unlockedSkins.classic = true;
+    if (!State.unlockedSkins[State.equippedSkin]) {
+      State.equippedSkin = 'classic';
     }
   }
 
@@ -286,6 +320,10 @@
         osc.connect(gain);
         gain.connect(audioCtx.destination);
 
+        osc.onended = () => {
+          try { osc.disconnect(); gain.disconnect(); } catch (e) { }
+        };
+
         osc.start(now);
         osc.stop(now + 0.09);
       } catch (e) { }
@@ -314,6 +352,10 @@
         filter.connect(gain);
         gain.connect(audioCtx.destination);
 
+        osc.onended = () => {
+          try { osc.disconnect(); filter.disconnect(); gain.disconnect(); } catch (e) { }
+        };
+
         osc.start(now);
         osc.stop(now + 0.13);
       } catch (e) { }
@@ -340,6 +382,10 @@
         noise.connect(filter);
         filter.connect(gain);
         gain.connect(audioCtx.destination);
+
+        noise.onended = () => {
+          try { noise.disconnect(); filter.disconnect(); gain.disconnect(); } catch (e) { }
+        };
 
         noise.start(now);
       } catch (e) { }
@@ -368,6 +414,10 @@
 
           osc.connect(gain);
           gain.connect(audioCtx.destination);
+
+          osc.onended = () => {
+            try { osc.disconnect(); gain.disconnect(); } catch (e) { }
+          };
 
           osc.start(now + note.delay);
           osc.stop(now + note.delay + 0.4);
@@ -448,6 +498,11 @@
       }
     } else {
       dom.streakPill.classList.remove('streak-active', 'on-fire');
+    }
+
+    if (dom.wrapper) {
+      const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || State.isPseudoFullscreen);
+      dom.wrapper.className = `game-wrapper tier-${tier.id}${isFs ? ' fullscreen-mode' : ''}`;
     }
 
     if (dom.toggleSound) {
@@ -692,20 +747,23 @@
     let minX, maxX;
     if (State.hoopSide === 'left') {
       // Hoop is on the left: ball spawns strictly in front of the front rim tip (never under or behind!)
-      minX = hoop.rimFrontX + Math.max(85, ball.radius * 4.5);
-      maxX = width - Math.max(70, width * 0.08);
-      if (maxX <= minX + 50) {
-        minX = hoop.rimFrontX + 55;
-        maxX = width - 40;
+      minX = hoop.rimFrontX + Math.max(75, ball.radius * 3.8);
+      maxX = width - Math.max(50, width * 0.08);
+      if (maxX <= minX + 25) {
+        minX = hoop.rimFrontX + 35;
+        maxX = width - 25;
       }
     } else {
       // Hoop is on the right: ball spawns strictly in front of the front rim tip (never under or behind!)
-      maxX = hoop.rimFrontX - Math.max(85, ball.radius * 4.5);
-      minX = Math.max(70, width * 0.08);
-      if (maxX <= minX + 50) {
-        maxX = hoop.rimFrontX - 55;
-        minX = 40;
+      maxX = hoop.rimFrontX - Math.max(75, ball.radius * 3.8);
+      minX = Math.max(50, width * 0.08);
+      if (maxX <= minX + 25) {
+        maxX = hoop.rimFrontX - 35;
+        minX = 25;
       }
+    }
+    if (maxX <= minX) {
+      maxX = minX + 20;
     }
 
     // Vertical placement: between 46% and 64% of screen height
@@ -728,6 +786,7 @@
     State.currentShot.backboardHits = 0;
     State.currentShot.scored = false;
     State.currentShot.isClean = false;
+    State.currentShot.enteredFromBelow = false;
 
     // Shot Distance & Zone Classification
     const hoopCenterX = (hoop.rimFrontX + hoop.rimBackX) / 2;
@@ -779,6 +838,7 @@
 
   function onPointerDown(e) {
     initAudio();
+    wakeGameLoop();
 
     if (State.phase !== 'IDLE' && State.phase !== 'AIMING') return;
 
@@ -792,7 +852,7 @@
       return;
     }
 
-    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || State.isPseudoFullscreen);
 
     // In normal (non-fullscreen) view, leave the top HUD/header region (clientY < 70)
     // completely untouched so Android Chrome native pull-to-refresh executes cleanly
@@ -827,6 +887,7 @@
 
   function onPointerMove(e) {
     if (!State.isAiming || e.pointerId !== State.pointerId) return;
+    wakeGameLoop();
 
     if (e.cancelable) {
       e.preventDefault();
@@ -868,6 +929,12 @@
       e.preventDefault();
     }
 
+    try {
+      if (dom.canvas.hasPointerCapture && dom.canvas.hasPointerCapture(e.pointerId)) {
+        dom.canvas.releasePointerCapture(e.pointerId);
+      }
+    } catch (err) { }
+
     State.isAiming = false;
     State.pointerId = null;
 
@@ -887,15 +954,23 @@
       ball.y = ball.originY;
       State.phase = 'IDLE';
     }
+    wakeGameLoop();
   }
 
   function onPointerCancel(e) {
     if (State.isAiming && e.pointerId === State.pointerId) {
+      try {
+        if (dom.canvas.hasPointerCapture && dom.canvas.hasPointerCapture(e.pointerId)) {
+          dom.canvas.releasePointerCapture(e.pointerId);
+        }
+      } catch (err) { }
+
       State.isAiming = false;
       State.pointerId = null;
       ball.x = ball.originX;
       ball.y = ball.originY;
       State.phase = 'IDLE';
+      wakeGameLoop();
     }
   }
 
@@ -980,9 +1055,16 @@
       checkRimCollisions(subDt);
 
       // ------------------------------------------
-      // Collision: Backboard (Vertical segment)
+      // Collision: Backboard (Physical oriented face plane & corner pegs)
       // ------------------------------------------
       checkBackboardCollision();
+
+      // Track if ball passes upwards through the rim cylinder from below (illegal shot)
+      const minHoopX = Math.min(hoop.rimFrontX, hoop.rimBackX);
+      const maxHoopX = Math.max(hoop.rimFrontX, hoop.rimBackX);
+      if (prevY >= hoop.rimY && ball.y <= hoop.rimY && ball.x >= minHoopX && ball.x <= maxHoopX && ball.vy < 0) {
+        State.currentShot.enteredFromBelow = true;
+      }
 
       // ------------------------------------------
       // Score Trigger Sensor
@@ -997,11 +1079,15 @@
         ball.y = floorY - ball.radius;
         if (ball.vy > 0) {
           const impact = Math.abs(ball.vy) / 600;
-          ball.vy = -ball.vy * RESTITUTION_FLOOR;
+          if (ball.vy > 35) {
+            ball.vy = -ball.vy * RESTITUTION_FLOOR;
+          } else {
+            ball.vy = 0;
+          }
           ball.angularVelocity *= 0.75;
           ball.vx *= 0.85;
 
-          if (performance.now() - ball.lastBounceTime > 90) {
+          if (performance.now() - ball.lastBounceTime > 90 && impact > 0.08) {
             Sound.bounce(impact);
             ball.lastBounceTime = performance.now();
           }
@@ -1016,12 +1102,16 @@
       // Left Wall (on-court only, allows launching high into sky)
       if (ball.x - ball.radius <= 0 && ball.y > 0) {
         ball.x = ball.radius;
-        ball.vx = -ball.vx * 0.5;
+        if (ball.vx < 0) {
+          ball.vx = -ball.vx * 0.5;
+        }
       }
       // Right Gym Wall behind backboard (on-court only)
       if (ball.x + ball.radius >= width && ball.y > 0) {
         ball.x = width - ball.radius;
-        ball.vx = -ball.vx * 0.5;
+        if (ball.vx > 0) {
+          ball.vx = -ball.vx * 0.5;
+        }
       }
       // Extreme ceiling safety to prevent runaway numeric overflow
       if (ball.y < -15000) {
@@ -1098,31 +1188,34 @@
       const ny = dy / dist;
       const vn = ball.vx * nx + ball.vy * ny;
 
-      // Soft relaxation penetration resolution (prevents ping-pong snapping between rims)
+      // Full penetration resolution (prevents sinking or sticking)
       const penetration = minDist - dist;
-      const resolveFactor = 0.85;
-      ball.x += nx * penetration * resolveFactor;
-      ball.y += ny * penetration * resolveFactor;
+      ball.x += nx * penetration;
+      ball.y += ny * penetration;
 
       const minRimX = Math.min(hoop.rimFrontX, hoop.rimBackX);
       const maxRimX = Math.max(hoop.rimFrontX, hoop.rimBackX);
       // If ball is descending cleanly into the hoop opening, funnel it down without upward kickback
       const isEnteringOpening = ball.vy > 0 && ball.y >= hoop.rimY - 6 && ball.x > minRimX + 3 && ball.x < maxRimX - 3;
 
-      // Elastic reflection if approaching along contact normal with genuine impact
-      if (vn < -15) {
+      if (vn < 0) {
         if (isEnteringOpening) {
           // Ball is plunging downward into the hoop cylinder: guide inward without upward stopping kickback
           ball.vx -= (1 + RESTITUTION_RIM * 0.4) * vn * nx;
           if (ball.vy < 35) ball.vy = 35;
-        } else {
+        } else if (vn < -15) {
+          // Elastic reflection for genuine impacts
           ball.vx -= (1 + RESTITUTION_RIM) * vn * nx;
           ball.vy -= (1 + RESTITUTION_RIM) * vn * ny;
           State.currentShot.rimHits++;
           triggerRimHitSound(px, py);
+        } else {
+          // Resting contact: cancel normal velocity to prevent sinking under gravity
+          ball.vx -= vn * nx;
+          ball.vy -= vn * ny;
         }
 
-        // Tangential friction only during active bounce impact (natural slight spin/speed transfer)
+        // Tangential friction during contact
         const tx = -ny;
         const ty = nx;
         const vt = ball.vx * tx + ball.vy * ty;
@@ -1182,46 +1275,43 @@
   }
 
   function checkBackboardCollision() {
-    // Vertical backboard plane at hoop.backboardX
-    const bx = hoop.backboardX;
-    const clampedY = Math.max(hoop.backboardTop, Math.min(ball.y, hoop.backboardBottom));
-    const dx = ball.x - bx;
-    const dy = ball.y - clampedY;
-    const dist = Math.hypot(dx, dy);
+    const courtDir = State.hoopSide === 'left' ? 1 : -1;
+    const faceX = hoop.backboardX + courtDir * 4.5;
+    const topY = hoop.backboardTop;
+    const bottomY = hoop.backboardBottom;
+    const r = ball.radius;
 
-    if (dist < ball.radius && dist > 0.0001) {
-      // Rebound normal points into the court
-      const nx = dx / dist;
-      const ny = dy / dist;
+    // 1. Front face collision (vertical board segment between topY and bottomY)
+    if (ball.y >= topY && ball.y <= bottomY) {
+      const distToFace = (ball.x - faceX) * courtDir;
+      if (distToFace < r && distToFace > -r * 1.5) {
+        ball.x = faceX + courtDir * r;
+        const vn = ball.vx * courtDir;
+        if (vn < -4) {
+          ball.vx = -vn * RESTITUTION_BOARD * courtDir;
+          ball.vy *= 0.92;
+          ball.angularVelocity *= 0.8;
+          const MAX_ANGULAR_VEL = 22;
+          ball.angularVelocity = Math.max(-MAX_ANGULAR_VEL, Math.min(MAX_ANGULAR_VEL, ball.angularVelocity));
 
-      const penetration = ball.radius - dist;
-      ball.x += nx * penetration;
-      ball.y += ny * penetration;
-
-      const vn = ball.vx * nx + ball.vy * ny;
-      if (vn < -4) {
-        ball.vx -= (1 + RESTITUTION_BOARD) * vn * nx;
-        ball.vy -= (1 + RESTITUTION_BOARD) * vn * ny;
-
-        // Glass surface vertical friction
-        ball.vy *= 0.92;
-
-        ball.angularVelocity *= 0.8;
-        const MAX_ANGULAR_VEL = 22;
-        ball.angularVelocity = Math.max(-MAX_ANGULAR_VEL, Math.min(MAX_ANGULAR_VEL, ball.angularVelocity));
-
-        State.currentShot.backboardHits++;
-
-        if (performance.now() - ball.lastClankTime > 85) {
-          Sound.rimClank();
-          ball.lastClankTime = performance.now();
+          State.currentShot.backboardHits++;
+          if (performance.now() - ball.lastClankTime > 85) {
+            Sound.rimClank();
+            ball.lastClankTime = performance.now();
+          }
         }
+        return;
       }
     }
+
+    // 2. Corner peg collisions (rounded corner tips at backboard top and bottom edges)
+    collideWithPeg(faceX, topY, false);
+    collideWithPeg(faceX, bottomY, false);
   }
 
   function checkScoreTrigger(prevY, currY, prevX, currX) {
     if (State.currentShot.scored) return;
+    if (State.currentShot.enteredFromBelow) return;
 
     // Rim opening sensor: ball cleanly crosses the horizontal rim plane inside the opening
     const minRimX = Math.min(hoop.rimFrontX, hoop.rimBackX);
@@ -1383,39 +1473,7 @@
     });
   }
 
-  // Smooth Dynamic Background Gradient Interpolation
-  const currentAtmosphere = {
-    top: [30, 41, 59],
-    bottom: [15, 23, 42]
-  };
-  let lastAppliedTopHex = '';
-  let lastAppliedBotHex = '';
 
-  function updateAtmosphere(dt) {
-    const targetTier = getCurrentTier();
-
-    let diff = 0;
-    const lerpRate = Math.min(1, 4.0 * dt);
-    for (let c = 0; c < 3; c++) {
-      diff += Math.abs(targetTier.top[c] - currentAtmosphere.top[c]) + Math.abs(targetTier.bottom[c] - currentAtmosphere.bottom[c]);
-      currentAtmosphere.top[c] += (targetTier.top[c] - currentAtmosphere.top[c]) * lerpRate;
-      currentAtmosphere.bottom[c] += (targetTier.bottom[c] - currentAtmosphere.bottom[c]) * lerpRate;
-    }
-
-    if (diff > 0.4) {
-      const topHex = `rgb(${Math.round(currentAtmosphere.top[0])}, ${Math.round(currentAtmosphere.top[1])}, ${Math.round(currentAtmosphere.top[2])})`;
-      const botHex = `rgb(${Math.round(currentAtmosphere.bottom[0])}, ${Math.round(currentAtmosphere.bottom[1])}, ${Math.round(currentAtmosphere.bottom[2])})`;
-
-      if (topHex !== lastAppliedTopHex) {
-        dom.wrapper.style.setProperty('--bg-top', topHex);
-        lastAppliedTopHex = topHex;
-      }
-      if (botHex !== lastAppliedBotHex) {
-        dom.wrapper.style.setProperty('--bg-bottom', botHex);
-        lastAppliedBotHex = botHex;
-      }
-    }
-  }
 
   // ==========================================
   // 8. PROCEDURAL RENDERING ROUTINES
@@ -2057,6 +2115,17 @@
   // ==========================================
   let lastTimestamp = 0;
   let isRunning = true;
+  let rafId = null;
+
+  function wakeGameLoop() {
+    if (!isRunning) {
+      isRunning = true;
+      lastTimestamp = performance.now();
+      if (!rafId) {
+        rafId = requestAnimationFrame(gameLoop);
+      }
+    }
+  }
 
   function gameLoop(timestamp) {
     if (!isRunning) return;
@@ -2083,16 +2152,13 @@
       }
     }
 
-    // 1. Atmosphere Background Lerp
-    updateAtmosphere(dt);
-
-    // 2. Physics & Ball Lifecycle
+    // 1. Physics & Ball Lifecycle
     updatePhysics(dt);
 
-    // 3. Procedural Net Dynamics
+    // 2. Procedural Net Dynamics
     updateNet(dt);
 
-    // 4. Update Particle Pool
+    // 3. Update Particle Pool
     for (let i = 0; i < MAX_PARTICLES; i++) {
       const p = particlePool[i];
       if (p.active) {
@@ -2106,7 +2172,7 @@
       }
     }
 
-    // 5. Update Floating Texts
+    // 4. Update Floating Texts
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
       const item = floatingTexts[i];
       item.age += dt;
@@ -2120,10 +2186,10 @@
       }
     }
 
-    // 6. Draw Canvas Scene
+    // 5. Draw Canvas Scene
     renderScene();
 
-    requestAnimationFrame(gameLoop);
+    rafId = requestAnimationFrame(gameLoop);
   }
 
   // ==========================================
@@ -2177,7 +2243,7 @@
   }
 
   function renderAchievementsList() {
-    dom.achievementsList.innerHTML = '';
+    dom.achievementsList.textContent = '';
 
     ACHIEVEMENTS_CATALOG.forEach(ach => {
       const isUnlocked = !!State.achievements[ach.id];
@@ -2185,42 +2251,80 @@
       const item = document.createElement('div');
       item.className = `achievement-item ${isUnlocked ? 'unlocked' : ''}`;
 
-      item.innerHTML = `
-        <div class="ach-icon-box">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
-            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
-            <path d="M4 22h16"></path>
-            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
-          </svg>
-        </div>
-        <div class="ach-info">
-          <div class="ach-title">${ach.title}</div>
-          <div class="ach-desc">${ach.desc}</div>
-          <div class="ach-reward">${ach.reward}</div>
-        </div>
-        <div class="ach-status">
-          ${isUnlocked ? '✓ Done' : 'Locked'}
-        </div>
-      `;
+      const iconBox = document.createElement('div');
+      iconBox.className = 'ach-icon-box';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('width', '20');
+      svg.setAttribute('height', '20');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
 
+      const p1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p1.setAttribute('d', 'M6 9H4.5a2.5 2.5 0 0 1 0-5H6');
+      const p2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p2.setAttribute('d', 'M18 9h1.5a2.5 2.5 0 0 0 0-5H18');
+      const p3 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p3.setAttribute('d', 'M4 22h16');
+      const p4 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p4.setAttribute('d', 'M18 2H6v7a6 6 0 0 0 12 0V2Z');
+      svg.append(p1, p2, p3, p4);
+      iconBox.appendChild(svg);
+
+      const infoBox = document.createElement('div');
+      infoBox.className = 'ach-info';
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'ach-title';
+      titleEl.textContent = ach.title;
+
+      const descEl = document.createElement('div');
+      descEl.className = 'ach-desc';
+      descEl.textContent = ach.desc;
+
+      const rewardEl = document.createElement('div');
+      rewardEl.className = 'ach-reward';
+      rewardEl.textContent = ach.reward;
+
+      infoBox.append(titleEl, descEl, rewardEl);
+
+      const statusEl = document.createElement('div');
+      statusEl.className = 'ach-status';
+      statusEl.textContent = isUnlocked ? '✓ Done' : 'Locked';
+
+      item.append(iconBox, infoBox, statusEl);
       dom.achievementsList.appendChild(item);
     });
   }
 
   function toggleFullscreen() {
     const doc = document;
-    const isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+    const isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement || State.isPseudoFullscreen);
     if (!isFs) {
       const root = doc.documentElement;
       if (root.requestFullscreen) {
-        root.requestFullscreen().catch(() => {});
+        root.requestFullscreen().catch(() => {
+          State.isPseudoFullscreen = true;
+          updateFullscreenUI();
+        });
       } else if (root.webkitRequestFullscreen) {
         root.webkitRequestFullscreen();
+      } else {
+        State.isPseudoFullscreen = true;
+        updateFullscreenUI();
       }
     } else {
-      if (doc.exitFullscreen) {
-        doc.exitFullscreen().catch(() => {});
+      if (State.isPseudoFullscreen) {
+        State.isPseudoFullscreen = false;
+        updateFullscreenUI();
+      } else if (doc.exitFullscreen) {
+        doc.exitFullscreen().catch(() => {
+          State.isPseudoFullscreen = false;
+          updateFullscreenUI();
+        });
       } else if (doc.webkitExitFullscreen) {
         doc.webkitExitFullscreen();
       }
@@ -2228,7 +2332,7 @@
   }
 
   function updateFullscreenUI() {
-    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || State.isPseudoFullscreen);
     if (dom.iconFsEnter && dom.iconFsExit) {
       dom.iconFsEnter.classList.toggle('hidden', isFs);
       dom.iconFsExit.classList.toggle('hidden', !isFs);
@@ -2237,7 +2341,8 @@
       dom.toggleFullscreen.checked = isFs;
     }
     if (dom.wrapper) {
-      dom.wrapper.classList.toggle('fullscreen-mode', isFs);
+      const tier = getCurrentTier();
+      dom.wrapper.className = `game-wrapper tier-${tier.id}${isFs ? ' fullscreen-mode' : ''}`;
     }
     if (dom.zenPill) {
       dom.zenPill.classList.toggle('hidden', !isFs);
@@ -2258,14 +2363,22 @@
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         isRunning = false;
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
         flushStateToStorage();
         if (audioCtx && audioCtx.state === 'running') {
           audioCtx.suspend();
         }
       } else {
-        isRunning = true;
-        lastTimestamp = performance.now();
-        requestAnimationFrame(gameLoop);
+        if (!isRunning) {
+          isRunning = true;
+          lastTimestamp = performance.now();
+          if (!rafId) {
+            rafId = requestAnimationFrame(gameLoop);
+          }
+        }
       }
     });
 
@@ -2281,16 +2394,30 @@
     loadSavedState();
     updateHUD();
 
-    // Event Listeners for Canvas Pointer API (non-passive to completely eliminate touch slop deadband)
+    // Event Listeners for Canvas Pointer API
     dom.canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
     dom.canvas.addEventListener('pointermove', onPointerMove, { passive: false });
     try {
       dom.canvas.addEventListener('pointerrawupdate', onPointerMove, { passive: false });
-      window.addEventListener('pointerrawupdate', onPointerMove, { passive: false });
     } catch (err) { }
-    window.addEventListener('pointermove', onPointerMove, { passive: false });
-    window.addEventListener('pointerup', onPointerUp, { passive: false });
-    window.addEventListener('pointercancel', onPointerCancel, { passive: false });
+    dom.canvas.addEventListener('pointerup', onPointerUp, { passive: false });
+    dom.canvas.addEventListener('pointercancel', onPointerCancel, { passive: false });
+    window.addEventListener('pointerup', onPointerUp, { passive: true });
+    window.addEventListener('pointercancel', onPointerCancel, { passive: true });
+    window.addEventListener('scroll', updateCanvasRect, { passive: true });
+
+    // Native Modal Dialog backdrop click dismissals
+    [dom.settingsModal, dom.skinsModal, dom.achievementsModal].forEach(dialog => {
+      if (dialog) {
+        dialog.addEventListener('click', (e) => {
+          const rect = dialog.getBoundingClientRect();
+          if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+            dialog.close();
+            wakeGameLoop();
+          }
+        });
+      }
+    });
 
     // Settings modal interactions
     dom.btnSettings.addEventListener('click', () => {
@@ -2315,6 +2442,7 @@
         updateHUD();
         resizeViewport();
         spawnBall(true);
+        wakeGameLoop();
       }
     });
 
@@ -2326,6 +2454,7 @@
         updateHUD();
         resizeViewport();
         spawnBall(true);
+        wakeGameLoop();
       }
     });
 
@@ -2372,7 +2501,10 @@
     });
 
     dom.closeSkinsBtn.addEventListener('click', () => dom.skinsModal.close());
-    dom.btnEquipSkin.addEventListener('click', () => dom.skinsModal.close());
+    dom.btnEquipSkin.addEventListener('click', () => {
+      dom.skinsModal.close();
+      wakeGameLoop();
+    });
 
     dom.btnAchievements.addEventListener('click', () => {
       renderAchievementsList();
@@ -2387,14 +2519,19 @@
     dom.btnCloseAchievements.addEventListener('click', () => dom.achievementsModal.close());
 
     // Window Resize Observer
-    window.addEventListener('resize', resizeViewport);
+    window.addEventListener('resize', () => {
+      resizeViewport();
+      wakeGameLoop();
+    });
 
     // Initial setup
     setupBatteryAndLifecycle();
     resizeViewport();
 
     // Start Main Loop
-    requestAnimationFrame(gameLoop);
+    isRunning = true;
+    lastTimestamp = performance.now();
+    rafId = requestAnimationFrame(gameLoop);
   }
 
   // Boot on DOMContentLoaded or immediately
