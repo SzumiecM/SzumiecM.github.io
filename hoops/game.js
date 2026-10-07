@@ -753,18 +753,27 @@
 
   // Floating score text announcements (Canvas-rendered for 0 DOM overhead)
   const floatingTexts = [];
-  function addFloatingText(text, x, y, color = '#f59e0b', fontSize = 26) {
+  function addFloatingText(text, x, y, color = '#f59e0b', fontSize = 26, opts = {}) {
+    const vx = opts.vx !== undefined ? opts.vx : (Math.random() - 0.5) * 16;
+    const vy = opts.vy !== undefined ? opts.vy : -28 - Math.random() * 10;
+    const rotation = opts.rotation !== undefined ? opts.rotation : (Math.random() - 0.5) * 0.12;
+    const maxAge = opts.maxAge || 1.35;
+
     floatingTexts.push({
       text,
       x,
       y,
+      startX: x,
       startY: y,
+      vx,
+      vy,
       color,
       fontSize,
+      rotation,
       alpha: 1,
-      scale: 0.6,
+      scale: 0.35,
       age: 0,
-      maxAge: 1.1
+      maxAge
     });
   }
 
@@ -827,7 +836,9 @@
 
     hoop.y = Math.max(115, Math.min(height * 0.28, height * 0.22 + 40));
 
-    const boardHeight = Math.max(85, Math.min(130, height * 0.17));
+    // Backboard pane height: strictly proportional to ballRadius (~4.75x ball radius)
+    // Guarantees consistent physical dimensions and bank-shot rebounds across portrait and landscape rotations
+    const boardHeight = Math.round(ballRadius * 4.75);
     hoop.backboardTop = hoop.y - boardHeight * 0.65;
     hoop.backboardBottom = hoop.y + boardHeight * 0.35;
     hoop.rimY = hoop.y;
@@ -836,9 +847,16 @@
     // Initialize procedural net spring mesh
     initNetMesh();
 
-    // If active ball not yet placed or out of bounds, spawn it
-    if (!activeBall || (activeBall.x <= 0 || activeBall.y <= 0 || activeBall.x > width || activeBall.y > height)) {
+    // Cancel active aiming if viewport rotated/resized mid-drag to avoid distorted vectors
+    if (State.isAiming) {
+      cancelAiming();
+    }
+
+    // Ensure active ball is placed in a strictly valid position for the new perspective/orientation
+    if (!activeBall) {
       spawnBall(false);
+    } else if (!activeBall.isLaunched) {
+      repositionActiveBall();
     }
   }
 
@@ -883,6 +901,87 @@
     }
   }
 
+  function calculateValidSpawnPosition() {
+    let minX, maxX;
+    if (State.hoopSide === 'left') {
+      minX = hoop.rimFrontX + Math.max(75, ballRadius * 3.8);
+      maxX = width - Math.max(50, width * 0.08);
+      if (maxX <= minX + 25) {
+        minX = hoop.rimFrontX + 35;
+        maxX = width - 25;
+      }
+    } else {
+      maxX = hoop.rimFrontX - Math.max(75, ballRadius * 3.8);
+      minX = Math.max(50, width * 0.08);
+      if (maxX <= minX + 25) {
+        maxX = hoop.rimFrontX - 35;
+        minX = 25;
+      }
+    }
+    if (maxX <= minX) {
+      maxX = minX + 20;
+    }
+
+    // Vertical placement: strictly below net bottom by at least 45px!
+    // Never above the hoop or inside the net, and leaves room below for slingshot pull
+    const minY = Math.max(hoop.rimY + hoop.netDepth + 45, height * 0.46);
+    const maxY = Math.min(height * 0.66, height - Math.max(90, ballRadius * 3.5));
+
+    const originX = minX + Math.random() * (maxX - minX);
+    const originY = minY + Math.random() * Math.max(10, maxY - minY);
+
+    return { originX, originY };
+  }
+
+  function repositionActiveBall() {
+    if (!activeBall || activeBall.isLaunched) return;
+
+    // Boundary & perspective checks:
+    // 1. Must be strictly below net bottom by at least 35px (never above hoop or inside net)
+    const minNetDistY = hoop.rimY + hoop.netDepth + 35;
+    const isAboveOrTooCloseToHoop = activeBall.originY < minNetDistY;
+    // 2. Must be within canvas vertical bounds with pull room below (never outside of screen)
+    const isOutOfBoundsY = activeBall.originY > height - ballRadius * 2.2 || activeBall.originY < minNetDistY;
+    // 3. Must be within canvas horizontal bounds
+    const isOutOfBoundsX = activeBall.originX < ballRadius || activeBall.originX > width - ballRadius;
+    // 4. Must be on the correct court side in front of rim tip (never behind backboard or under hoop)
+    const isWrongSideOfHoop = State.hoopSide === 'left'
+      ? activeBall.originX < hoop.rimFrontX + 40
+      : activeBall.originX > hoop.rimFrontX - 40;
+
+    if (isAboveOrTooCloseToHoop || isOutOfBoundsY || isOutOfBoundsX || isWrongSideOfHoop) {
+      const pos = calculateValidSpawnPosition();
+      activeBall.originX = pos.originX;
+      activeBall.originY = pos.originY;
+      activeBall.x = pos.originX;
+      activeBall.y = pos.originY;
+      activeBall.vx = 0;
+      activeBall.vy = 0;
+    }
+
+    // Always recalculate distance and zone info to match the updated perspective and viewport
+    const hoopCenterX = (hoop.rimFrontX + hoop.rimBackX) / 2;
+    const distPx = Math.hypot(activeBall.originX - hoopCenterX, activeBall.originY - hoop.rimY);
+    const feet = Math.max(12, Math.round(distPx / 22) + 4);
+    activeBall.shotData.distanceFeet = feet;
+
+    let zoneName = 'MID-RANGE';
+    let zoneColor = '#38bdf8';
+    if (feet >= 38) {
+      zoneName = 'DOWNTOWN';
+      zoneColor = '#ef4444';
+    } else if (feet >= 28) {
+      zoneName = 'DEEP 3PT';
+      zoneColor = '#f59e0b';
+    } else if (feet >= 22) {
+      zoneName = '3-POINTER';
+      zoneColor = '#10b981';
+    }
+    activeBall.shotData.zoneName = zoneName;
+    activeBall.shotData.zoneColor = zoneColor;
+    State.currentShot = activeBall.shotData;
+  }
+
   function createBall(x, y, animate = true) {
     return {
       id: nextBallId++,
@@ -921,8 +1020,9 @@
   }
 
   function spawnBall(animate = true) {
-    // If activeBall exists and hasn't launched yet, ensure it is visible and ready
+    // If activeBall exists and hasn't launched yet, validate/reposition it for current viewport
     if (activeBall && !activeBall.isLaunched) {
+      repositionActiveBall();
       if (!animate) {
         activeBall.scale = 1;
         activeBall.opacity = 1;
@@ -930,39 +1030,12 @@
       return activeBall;
     }
 
-    // Generous court spawn bounds ensuring ball NEVER spawns under or behind hoop:
-    let minX, maxX;
-    if (State.hoopSide === 'left') {
-      minX = hoop.rimFrontX + Math.max(75, ballRadius * 3.8);
-      maxX = width - Math.max(50, width * 0.08);
-      if (maxX <= minX + 25) {
-        minX = hoop.rimFrontX + 35;
-        maxX = width - 25;
-      }
-    } else {
-      maxX = hoop.rimFrontX - Math.max(75, ballRadius * 3.8);
-      minX = Math.max(50, width * 0.08);
-      if (maxX <= minX + 25) {
-        maxX = hoop.rimFrontX - 35;
-        minX = 25;
-      }
-    }
-    if (maxX <= minX) {
-      maxX = minX + 20;
-    }
-
-    // Vertical placement: between 46% and 64% of screen height
-    const minY = Math.max(hoop.rimY + hoop.netDepth + 45, height * 0.46);
-    const maxY = Math.min(height * 0.64, height - 160);
-
-    const originX = minX + Math.random() * (maxX - minX);
-    const originY = minY + Math.random() * Math.max(10, maxY - minY);
-
-    const newBall = createBall(originX, originY, animate);
+    const pos = calculateValidSpawnPosition();
+    const newBall = createBall(pos.originX, pos.originY, animate);
 
     // Shot Distance & Zone Classification
     const hoopCenterX = (hoop.rimFrontX + hoop.rimBackX) / 2;
-    const distPx = Math.hypot(originX - hoopCenterX, originY - hoop.rimY);
+    const distPx = Math.hypot(pos.originX - hoopCenterX, pos.originY - hoop.rimY);
     const feet = Math.max(12, Math.round(distPx / 22) + 4);
     newBall.shotData.distanceFeet = feet;
 
@@ -1795,37 +1868,39 @@
       p.vx += (idx < hoop.netPoints.length / 2 ? -1 : 1) * (45 + Math.random() * 30);
     });
 
-    // Visual Floating Announcements
+    // Visual Floating Announcements (Comic Pop-Art feedback)
     const midRimX = (hoop.rimFrontX + hoop.rimBackX) / 2;
+    const isHoopLeft = (State.hoopSide === 'left');
+    const inwardDir = isHoopLeft ? 1 : -1;
     const scoreColor = isClean ? '#38bdf8' : (multiplier >= 2 ? '#fbbf24' : '#f59e0b');
 
-    // 1. Primary Points popup
-    addFloatingText(`+${shotPoints.toLocaleString()} PTS!`, midRimX, hoop.rimY - 26, scoreColor, 28);
+    // 1. Primary Points popup - directly at rim with punchy comic pop
+    addFloatingText(`+${shotPoints.toLocaleString()} PTS!`, midRimX, hoop.rimY - 26, scoreColor, 28, {
+      vx: (Math.random() - 0.5) * 8,
+      vy: -24,
+      rotation: (Math.random() - 0.5) * 0.08
+    });
 
-    // 2. Style, Distance, Sky & Multiplier Breakdown
+    // 2. Style, Distance & Multiplier Breakdown
     const parts = [];
     if (styleLabel) parts.push(styleLabel);
     parts.push(distLabel);
-    if (isOffscreen && apexFeet > 0) parts.push(`${apexFeet}FT SKY`);
+    if (isOffscreen && apexFeet >= 38) parts.push(`${apexFeet}FT SKY`);
     if (multiplier > 1) {
       parts.push(`×${multiplier.toFixed(multiplier % 1 === 0 ? 0 : 1)}`);
     }
     const breakdown = parts.join(' • ');
+
+    // Spawn breakdown cleanly below net so it drifts like the swishing net
     setTimeout(() => {
-      addFloatingText(breakdown, midRimX, hoop.rimY - 50, '#e2e8f0', 19);
-    }, 90);
+      addFloatingText(breakdown, midRimX, hoop.rimY + hoop.netDepth * 0.55 + 6, '#e2e8f0', 17, {
+        vx: (Math.random() - 0.5) * 8,
+        vy: 16,
+        rotation: (Math.random() - 0.5) * 0.06
+      });
+    }, 70);
 
-    // Scarce Moonshot / Sky-Hook / Stratosphere callout
-    if (isOffscreen && heightLabel) {
-      setTimeout(() => {
-        let labelColor = '#c084fc';
-        if (apexFeet >= 160) labelColor = '#f43f5e';
-        else if (apexFeet >= 120) labelColor = '#a855f7';
-        addFloatingText(`${heightLabel} (${apexFeet} FT)`, midRimX, hoop.rimY - 96, labelColor, 24);
-      }, 230);
-    }
-
-    // 3. Streak Milestones
+    // 3. Streak Milestones (prominent size 28 matching points, bursting into open court with whacky comic tilt)
     if (State.streak >= 2) {
       setTimeout(() => {
         let streakMsg = `STREAK ${State.streak}! 🔥`;
@@ -1843,15 +1918,49 @@
           streakMsg = 'LEGENDARY! 👑 (STREAK 15)';
           streakColor = '#f59e0b';
         }
-        addFloatingText(streakMsg, midRimX, hoop.rimY - 74, streakColor, 22);
-      }, 190);
+
+        // Burst into open court space where clearance is huge on both landscape & portrait
+        const streakSpawnX = midRimX + inwardDir * (Math.max(75, ballRadius * 3.5) + Math.random() * 25);
+        const streakSpawnY = hoop.rimY - 10 + (Math.random() * 20 - 10);
+
+        addFloatingText(streakMsg, streakSpawnX, streakSpawnY, streakColor, 28, {
+          vx: inwardDir * (18 + Math.random() * 10),
+          vy: -28 - Math.random() * 8,
+          rotation: (Math.random() - 0.5) * 0.12
+        });
+      }, 150);
     }
 
-    // 4. New High Score celebration!
+    // 4. Epic Stratosphere / Moonshot callout (ONLY for true mega-high arcs >= 80 FT)
+    if (isOffscreen && apexFeet >= 80 && heightLabel) {
+      setTimeout(() => {
+        let labelColor = '#c084fc';
+        if (apexFeet >= 160) labelColor = '#f43f5e';
+        else if (apexFeet >= 120) labelColor = '#a855f7';
+
+        // High in open court sky!
+        const skyX = width * 0.5 + (Math.random() - 0.5) * 50;
+        const skyY = Math.max(38, Math.min(65, height * 0.18));
+
+        addFloatingText(`${heightLabel} (${apexFeet} FT)`, skyX, skyY, labelColor, 25, {
+          vx: (Math.random() - 0.5) * 10,
+          vy: -16,
+          rotation: (Math.random() - 0.5) * 0.10
+        });
+      }, 220);
+    }
+
+    // 5. New High Score celebration! Center court banner
     if (isNewBestRun) {
       setTimeout(() => {
-        addFloatingText('★ NEW HIGH SCORE! ★', midRimX, hoop.rimY - 96, '#f59e0b', 25);
-      }, 300);
+        const centerScoreX = width * 0.5;
+        const centerScoreY = Math.max(48, Math.min(80, height * 0.22));
+        addFloatingText('★ NEW HIGH SCORE! ★', centerScoreX, centerScoreY, '#f59e0b', 27, {
+          vx: 0,
+          vy: -20,
+          rotation: 0
+        });
+      }, 280);
     }
 
     // Confetti / Sparks celebration
@@ -2592,18 +2701,59 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const paddingX = 14;
+    const screenWidth = width;
+
+    for (let i = 0; i < floatingTexts.length; i++) {
       const item = floatingTexts[i];
-      ctx.font = `800 ${Math.round(item.fontSize * item.scale)}px system-ui, sans-serif`;
-      ctx.globalAlpha = Math.max(0, item.alpha);
+      if (item.alpha <= 0.01) continue;
 
-      // Stroke border for crisp readability
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.lineWidth = 4;
-      ctx.strokeText(item.text, item.x, item.y);
+      let fontSize = Math.round(item.fontSize * item.scale);
+      if (fontSize < 8) continue;
+      // Bold comic pop-art typography
+      ctx.font = `900 ${fontSize}px system-ui, -apple-system, sans-serif`;
 
+      let textWidth = ctx.measureText(item.text).width;
+      const maxAllowedWidth = screenWidth - paddingX * 2;
+
+      // Auto-shrink font if text exceeds screen bounds on very narrow viewports
+      if (textWidth > maxAllowedWidth && maxAllowedWidth > 40) {
+        const shrinkFactor = maxAllowedWidth / textWidth;
+        fontSize = Math.max(12, Math.floor(fontSize * shrinkFactor));
+        ctx.font = `900 ${fontSize}px system-ui, -apple-system, sans-serif`;
+        textWidth = ctx.measureText(item.text).width;
+      }
+
+      // Clamp X position dynamically so text is NEVER cut off by screen edges
+      const halfWidth = textWidth / 2;
+      let drawX = item.x;
+      if (drawX - halfWidth < paddingX) {
+        drawX = halfWidth + paddingX;
+      } else if (drawX + halfWidth > screenWidth - paddingX) {
+        drawX = screenWidth - halfWidth - paddingX;
+      }
+
+      let drawY = item.y;
+
+      ctx.save();
+      ctx.translate(drawX, drawY);
+      if (item.rotation) {
+        ctx.rotate(item.rotation);
+      }
+      ctx.globalAlpha = Math.max(0, Math.min(1, item.alpha));
+
+      // Comic Pop-Art Ink Outline (thick, round, comic-book punch)
+      ctx.strokeStyle = 'rgba(10, 15, 29, 0.96)';
+      ctx.lineWidth = Math.max(3.8, Math.round(fontSize / 5.2));
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.strokeText(item.text, 0, 0);
+
+      // Vibrant Pop-Art Color Fill
       ctx.fillStyle = item.color;
-      ctx.fillText(item.text, item.x, item.y);
+      ctx.fillText(item.text, 0, 0);
+
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -2670,15 +2820,30 @@
       }
     }
 
-    // 4. Update Floating Texts
+    // 4. Update Floating Texts (Smooth deceleration drift & spring animations)
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
       const item = floatingTexts[i];
       item.age += dt;
-      item.y = item.startY - 45 * Math.sin((item.age / item.maxAge) * (Math.PI / 2));
-      item.scale = Math.min(1.15, 0.6 + (item.age / 0.15) * 0.5);
-      if (item.age > item.maxAge * 0.65) {
-        item.alpha = 1 - (item.age - item.maxAge * 0.65) / (item.maxAge * 0.35);
+      const progress = item.age / item.maxAge;
+
+      // Smooth deceleration drift
+      item.x += item.vx * dt * (1 - progress * 0.45);
+      item.y += item.vy * dt * (1 - progress * 0.55);
+
+      // Punchy arcade spring pop: 0.35 -> 1.15 in 120ms -> settles to 1.0
+      if (item.age < 0.12) {
+        item.scale = 0.35 + (item.age / 0.12) * 0.8;
+      } else if (item.age < 0.24) {
+        item.scale = 1.15 - ((item.age - 0.12) / 0.12) * 0.15;
+      } else {
+        item.scale = 1.0;
       }
+
+      // Smooth fade-out in final 35% of lifetime
+      if (progress > 0.65) {
+        item.alpha = 1 - (progress - 0.65) / 0.35;
+      }
+
       if (item.age >= item.maxAge) {
         floatingTexts.splice(i, 1);
       }
@@ -3070,10 +3235,18 @@
       });
     }
 
-    // Window Resize Observer
+    // Window Resize & Orientation Observers
     window.addEventListener('resize', () => {
       resizeViewport();
       wakeGameLoop();
+    });
+
+    window.addEventListener('orientationchange', () => {
+      cancelAiming();
+      setTimeout(() => {
+        resizeViewport(true);
+        wakeGameLoop();
+      }, 80);
     });
 
     // Initial setup
