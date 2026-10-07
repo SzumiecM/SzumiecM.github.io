@@ -205,29 +205,12 @@
     isDirtyStorage: false,
     isPseudoFullscreen: false,
 
-    // Game lifecycle states: 'SPAWNING' | 'IDLE' | 'AIMING' | 'IN_FLIGHT' | 'RESOLVING'
-    phase: 'IDLE',
-
     // Aiming state
     isAiming: false,
     aimStart: { x: 0, y: 0 },
     aimCurrent: { x: 0, y: 0 },
     aimSmooth: { x: 0, y: 0 },
-    pointerId: null,
-
-    // Active shot statistics
-    currentShot: {
-      rimHits: 0,
-      backboardHits: 0,
-      scored: false,
-      isClean: false,
-      enteredFromBelow: false,
-      distanceFeet: 22,
-      zoneName: '3-POINTER',
-      zoneColor: '#10b981',
-      minY: 999999,
-      apexFeet: 0
-    }
+    pointerId: null
   };
 
   function getCurrentTier() {
@@ -269,13 +252,6 @@
           }
           if (typeof parsed.equippedSkin === 'string' && BALL_SKINS.some(s => s.id === parsed.equippedSkin)) {
             State.equippedSkin = parsed.equippedSkin;
-          }
-          if (parsed.unlockedSkins && typeof parsed.unlockedSkins === 'object' && !Array.isArray(parsed.unlockedSkins)) {
-            BALL_SKINS.forEach(skin => {
-              if (parsed.unlockedSkins[skin.id] === true) {
-                State.unlockedSkins[skin.id] = true;
-              }
-            });
           }
           if (parsed.achievements && typeof parsed.achievements === 'object' && !Array.isArray(parsed.achievements)) {
             ACHIEVEMENTS_CATALOG.forEach(ach => {
@@ -566,9 +542,6 @@
     hudMultiplier: document.getElementById('hudMultiplier'),
     score: document.getElementById('hudScore'),
     highScore: document.getElementById('hudHighScore'),
-    bestStreak: document.getElementById('hudBestStreak'),
-    totalBaskets: document.getElementById('hudTotalBaskets'),
-    tierBadge: document.getElementById('hudTierBadge'),
     statHighScore: document.getElementById('statHighScore'),
     statBestStreak: document.getElementById('statBestStreak'),
     statTotalBaskets: document.getElementById('statTotalBaskets'),
@@ -686,14 +659,6 @@
     if (dom.statMaxHeight) dom.statMaxHeight.textContent = (State.maxHeight && State.maxHeight > 0) ? `${State.maxHeight} FT` : '--';
     if (dom.statLongestShot) dom.statLongestShot.textContent = `${State.longestShot || 0} FT`;
 
-    // Legacy fallback elements update
-    if (dom.bestStreak) dom.bestStreak.textContent = State.bestStreak;
-    if (dom.totalBaskets) dom.totalBaskets.textContent = State.lifetimeBaskets;
-    if (dom.tierBadge) {
-      dom.tierBadge.textContent = tier.name;
-      dom.tierBadge.className = `tier-badge tier-${tier.id}`;
-    }
-
     const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || State.isPseudoFullscreen);
     if (dom.wrapper) {
       dom.wrapper.className = `game-wrapper tier-${tier.id}${isFs ? ' fullscreen-mode' : ''}`;
@@ -776,19 +741,10 @@
     netPoints: [] // Dynamic spring vertices
   };
 
-  // Playable Court Arena bounds (adapts to widescreen and narrow viewports)
-  const court = {
-    left: 0,
-    width: 800,
-    height: 600
-  };
-
   const GRAVITY = 1380; // Newtonian gravity: authentic climb, apex deceleration & plunge
-  const SUB_STEPS = 8;
   const K_LAUNCH_X = 4.0; // Calibrated horizontal pull scale for surgical micro-aiming precision
   const K_LAUNCH_Y = 5.4; // Calibrated vertical arc pull scale (generous travel, zero deadband)
   const V_MIN = 25; // Responsive minimum velocity for immediate micro-adjustment tracking
-  const V_MAX = 1450; // High ceiling for deep arching shots
   const RESTITUTION_RIM = 0.52; // Authentic steel rim restitution: natural rattles and authentic misses
   const RESTITUTION_BOARD = 0.60; // Glass backboard rebound: requires proper touch/arc, not guaranteed
   const RESTITUTION_FLOOR = 0.64; // Tuned floor restitution: enough pop to reach net on intentional floor bounce, without bouncing wild
@@ -854,6 +810,16 @@
     });
   }
 
+  let cachedHoopSpotGradient = null;
+  let cachedHoopSpotRadius = 0;
+  function updateHoopSpotGradient() {
+    cachedHoopSpotRadius = Math.max(280, width * 0.45);
+    cachedHoopSpotGradient = ctx.createRadialGradient(hoop.rimFrontX, hoop.rimY, 15, hoop.rimFrontX, hoop.rimY, cachedHoopSpotRadius);
+    cachedHoopSpotGradient.addColorStop(0, 'rgba(56, 189, 248, 0.09)');
+    cachedHoopSpotGradient.addColorStop(0.6, 'rgba(30, 41, 59, 0.04)');
+    cachedHoopSpotGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  }
+
   // Responsive Court Recomputation
   function resizeViewport(force = false) {
     const rect = dom.canvas.parentElement.getBoundingClientRect();
@@ -881,12 +847,6 @@
     balls.forEach(b => {
       b.radius = ballRadius;
     });
-
-    // Dynamic Court Bounds:
-    // Full court spanning 100% of viewport on both mobile and widescreen
-    court.left = 0;
-    court.width = width;
-    court.height = height;
 
     const isWidescreen = width > height * 1.15;
     // Position the Hoop at upper section near screen edge
@@ -920,6 +880,9 @@
     hoop.backboardBottom = hoop.y + boardHeight * 0.35;
     hoop.rimY = hoop.y;
     hoop.netDepth = ballRadius * 1.85;
+
+    // Cache ambient hoop spot gradient
+    updateHoopSpotGradient();
 
     // Initialize procedural net spring mesh
     initNetMesh();
@@ -1002,10 +965,13 @@
     // Vertical placement: strictly below net bottom by at least 45px!
     // Never above the hoop or inside the net, and leaves room below for slingshot pull
     const minY = Math.max(hoop.rimY + hoop.netDepth + 45, height * 0.46);
-    const maxY = Math.min(height * 0.66, height - Math.max(90, ballRadius * 3.5));
+    let maxY = Math.min(height * 0.66, height - Math.max(90, ballRadius * 3.5));
+    if (maxY <= minY) {
+      maxY = minY + 20;
+    }
 
     const originX = minX + Math.random() * (maxX - minX);
-    const originY = minY + Math.random() * Math.max(10, maxY - minY);
+    const originY = minY + Math.random() * (maxY - minY);
 
     return { originX, originY };
   }
@@ -1056,13 +1022,13 @@
     }
     activeBall.shotData.zoneName = zoneName;
     activeBall.shotData.zoneColor = zoneColor;
-    State.currentShot = activeBall.shotData;
   }
 
   function createBall(x, y, animate = true) {
     return {
       id: nextBallId++,
       missHandled: false,
+      floorStreakBroken: false,
       x: x,
       y: y,
       vx: 0,
@@ -1132,10 +1098,8 @@
     newBall.shotData.zoneName = zoneName;
     newBall.shotData.zoneColor = zoneColor;
 
-    State.currentShot = newBall.shotData;
     activeBall = newBall;
     balls.push(newBall);
-    State.phase = 'IDLE';
 
     return newBall;
   }
@@ -1195,7 +1159,6 @@
 
     // Grab ANYWHERE on the screen to begin aiming!
     State.isAiming = true;
-    State.phase = 'AIMING';
     State.pointerId = e.pointerId;
     State.aimStart = { x: p.x, y: p.y };
     State.aimCurrent = { x: p.x, y: p.y };
@@ -1291,26 +1254,12 @@
       }
     }
 
-    State.phase = 'IDLE';
     wakeGameLoop();
   }
 
   function onPointerCancel(e) {
     if (State.isAiming && e.pointerId === State.pointerId) {
-      try {
-        if (dom.canvas.hasPointerCapture && dom.canvas.hasPointerCapture(e.pointerId)) {
-          dom.canvas.releasePointerCapture(e.pointerId);
-        }
-      } catch (err) { }
-
-      State.isAiming = false;
-      State.pointerId = null;
-      if (activeBall && !activeBall.isLaunched) {
-        activeBall.x = activeBall.originX;
-        activeBall.y = activeBall.originY;
-      }
-      State.phase = 'IDLE';
-      wakeGameLoop();
+      cancelAiming();
     }
   }
 
@@ -1505,8 +1454,8 @@
             // Instantly break active streak on floor contact (playground rules: floor bounce doesn't continue streak)
             // A previous ball superseded by a newer scoring ball cannot cancel the active streak!
             const isSuperseded = (State.lastScoredBallId && b.id <= State.lastScoredBallId);
-            if (!isSuperseded && !b.missHandled && State.streak > 0 && !b.shotData.scored && !b.shotData.resolved) {
-              b.missHandled = true;
+            if (!isSuperseded && !b.floorStreakBroken && State.streak > 0 && !b.shotData.scored && !b.shotData.resolved) {
+              b.floorStreakBroken = true;
               State.streak = 0;
               State.sessionCleanShots = 0;
               updateHUD();
@@ -1590,7 +1539,7 @@
               handleShotMiss(b);
             }
           }
-        } else if ((ballSpeed < 25 && b.y >= floorY - b.radius - 2) || b.restTime > 0.85 || b.flightTime > 5.0) {
+        } else if ((ballSpeed < 25 && b.y >= floorY - b.radius - 2) || b.restTime > 0.85 || b.flightTime > 8.0 || (b.flightTime > 4.5 && b.y >= floorY - b.radius - 10)) {
           if (!b.shotData.scored) {
             handleShotMiss(b);
           }
@@ -1752,7 +1701,7 @@
     }
   }
 
-  function collideWithPeg(b, px, py, isBackRim = false) {
+  function collideWithPeg(b, px, py, isBackRim = false, isRimPeg = true) {
     const dx = b.x - px;
     const dy = b.y - py;
     const dist = Math.hypot(dx, dy);
@@ -1771,7 +1720,7 @@
       const minRimX = Math.min(hoop.rimFrontX, hoop.rimBackX);
       const maxRimX = Math.max(hoop.rimFrontX, hoop.rimBackX);
       // If ball is descending cleanly into the hoop opening, funnel it down without upward kickback
-      const isEnteringOpening = b.vy > 0 && b.y >= hoop.rimY - 6 && b.x > minRimX + 3 && b.x < maxRimX - 3;
+      const isEnteringOpening = isRimPeg && b.vy > 0 && b.y >= hoop.rimY - 6 && b.x > minRimX + 3 && b.x < maxRimX - 3;
 
       if (vn < 0) {
         if (isEnteringOpening) {
@@ -1780,10 +1729,19 @@
           if (b.vy < 35) b.vy = 35;
         } else if (vn < -15) {
           // Elastic reflection for genuine impacts
-          b.vx -= (1 + RESTITUTION_RIM) * vn * nx;
-          b.vy -= (1 + RESTITUTION_RIM) * vn * ny;
-          b.shotData.rimHits++;
-          triggerRimHitSound(b, px, py);
+          const rest = isRimPeg ? RESTITUTION_RIM : RESTITUTION_BOARD;
+          b.vx -= (1 + rest) * vn * nx;
+          b.vy -= (1 + rest) * vn * ny;
+          if (isRimPeg) {
+            b.shotData.rimHits++;
+            triggerRimHitSound(b, px, py);
+          } else {
+            b.shotData.backboardHits++;
+            if (performance.now() - (b.lastClankTime || 0) > 85) {
+              Sound.rimClank();
+              b.lastClankTime = performance.now();
+            }
+          }
         } else {
           // Resting contact: cancel normal velocity to prevent sinking under gravity
           b.vx -= vn * nx;
@@ -1843,10 +1801,10 @@
     }
 
     // Front Rim Peg (outer court-facing peg, full circle)
-    collideWithPeg(b, hoop.rimFrontX, hoop.rimY, false);
+    collideWithPeg(b, hoop.rimFrontX, hoop.rimY, false, true);
 
     // Back Rim Peg (inner court-facing peg, full circle)
-    collideWithPeg(b, hoop.rimBackX, hoop.rimY, true);
+    collideWithPeg(b, hoop.rimBackX, hoop.rimY, true, true);
   }
 
   function checkBackboardCollision(b) {
@@ -1880,8 +1838,8 @@
     }
 
     // 2. Corner peg collisions (rounded corner tips at backboard top and bottom edges)
-    collideWithPeg(b, faceX, topY, false);
-    collideWithPeg(b, faceX, bottomY, false);
+    collideWithPeg(b, faceX, topY, false, false);
+    collideWithPeg(b, faceX, bottomY, false, false);
   }
 
   function checkScoreTrigger(b, prevY, currY, prevX, currX) {
@@ -2100,13 +2058,13 @@
         }
 
         // Burst into open court space where clearance is huge on both landscape & portrait
-        const streakSpawnX = midRimX + inwardDir * (Math.max(75, ballRadius * 3.5) + Math.random() * 25);
-        const streakSpawnY = hoop.rimY - 10 + (Math.random() * 20 - 10);
+        const courtCenterX = width * 0.5 + (Math.random() - 0.5) * 30;
+        const courtCenterY = Math.max(48, Math.min(78, height * 0.20));
 
-        addFloatingText(streakMsg, streakSpawnX, streakSpawnY, streakColor, 28, {
-          vx: inwardDir * (18 + Math.random() * 10),
-          vy: -28 - Math.random() * 8,
-          rotation: (Math.random() - 0.5) * 0.12
+        addFloatingText(streakMsg, courtCenterX, courtCenterY, streakColor, 28, {
+          vx: (Math.random() - 0.5) * 12,
+          vy: -22 - Math.random() * 6,
+          rotation: (Math.random() - 0.5) * 0.08
         });
       }, 150);
     }
@@ -2260,6 +2218,7 @@
     }
     State.score = 0;
     State.streak = 0;
+    State.sessionCleanShots = 0;
     State.announcedHighScore = false;
     updateHUD();
     scheduleStorageFlush();
@@ -2270,7 +2229,8 @@
     const k = 140; // spring tension
     const damping = 0.88; // friction
 
-    hoop.netPoints.forEach(p => {
+    for (let i = 0; i < hoop.netPoints.length; i++) {
+      const p = hoop.netPoints[i];
       const dx = p.restX - p.x;
       const dy = p.restY - p.y;
       p.vx += dx * k * dt;
@@ -2279,7 +2239,7 @@
       p.vy *= damping;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-    });
+    }
   }
 
 
@@ -2293,7 +2253,6 @@
     targetCtx.save();
     targetCtx.translate(x, y);
     targetCtx.rotate(angle);
-
     switch (skinId) {
       case 'watermelon':
         renderWatermelonSkin(targetCtx, r);
@@ -3383,16 +3342,14 @@
     renderCourtFloor();
 
     // Subtle ambient stadium court halo behind hoop & play zone for rich contrast
-    ctx.save();
-    const hoopSpot = ctx.createRadialGradient(hoop.rimFrontX, hoop.rimY, 15, hoop.rimFrontX, hoop.rimY, Math.max(280, width * 0.45));
-    hoopSpot.addColorStop(0, 'rgba(56, 189, 248, 0.09)');
-    hoopSpot.addColorStop(0.6, 'rgba(30, 41, 59, 0.04)');
-    hoopSpot.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = hoopSpot;
-    ctx.beginPath();
-    ctx.arc(hoop.rimFrontX, hoop.rimY, Math.max(280, width * 0.45), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    if (cachedHoopSpotGradient) {
+      ctx.save();
+      ctx.fillStyle = cachedHoopSpotGradient;
+      ctx.beginPath();
+      ctx.arc(hoop.rimFrontX, hoop.rimY, cachedHoopSpotRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
     // 1. Backboard Pole & Mounting Brackets (Background)
     renderBackboard();
@@ -3401,7 +3358,7 @@
     renderNetStrands(false);
 
     // 3. Predictive Dotted Trajectory Arc (when Aiming)
-    if (State.isAiming && State.phase === 'AIMING') {
+    if (State.isAiming) {
       renderPredictiveTrajectory();
     }
 
@@ -3681,7 +3638,9 @@
       ctx.lineWidth = 1.5;
     }
 
-    [0.35, 0.7, 1.0].forEach(fraction => {
+    const netFractions = [0.35, 0.7, 1.0];
+    for (let f = 0; f < 3; f++) {
+      const fraction = netFractions[f];
       ctx.beginPath();
       for (let i = 0; i < count; i++) {
         const p = hoop.netPoints[i];
@@ -3691,7 +3650,7 @@
         else ctx.lineTo(rx, ry);
       }
       ctx.stroke();
-    });
+    }
 
     ctx.restore();
   }
@@ -3748,7 +3707,7 @@
   function renderPredictiveTrajectory() {
     if (!activeBall || !State.isAiming) return;
     const launch = computeLaunchVelocity(true);
-    if (launch.dragDist < 2 || launch.speed < V_MIN) return;
+    if (launch.dragDist < 6 || launch.speed < V_MIN) return;
 
     ctx.save();
 
@@ -3814,7 +3773,6 @@
       const alpha = Math.max(0.2, 1 - (i / totalPoints) * 0.8);
       const dotRadius = Math.max(2.5, 4.8 - (i / totalPoints) * 2.2);
 
-      ctx.save();
       ctx.globalAlpha = alpha;
 
       // Dark comic ink ring
@@ -3835,7 +3793,6 @@
         ctx.fillStyle = '#ffffff';
         ctx.fill();
       }
-      ctx.restore();
     }
 
     ctx.restore();
@@ -3850,8 +3807,6 @@
         const alpha = Math.max(0, 1 - progress);
         const rad = p.radius * (1 - progress * 0.35);
 
-        ctx.save();
-        ctx.translate(p.x, p.y);
         ctx.globalAlpha = alpha;
 
         const isDarkSmoke = p.color === '#18181b' || p.color === '#0a0f1d';
@@ -3860,6 +3815,8 @@
         // Alternate between comic 4-point starburst glints and comic action dots!
         if (i % 2 === 0 && rad > 2.5) {
           // 4-point comic sparkle
+          ctx.save();
+          ctx.translate(p.x, p.y);
           ctx.beginPath();
           const s = rad * 1.6;
           ctx.moveTo(0, -s);
@@ -3875,10 +3832,11 @@
 
           ctx.fillStyle = p.color;
           ctx.fill();
+          ctx.restore();
         } else {
-          // Comic pop action dot with ink outline
+          // Comic pop action dot with ink outline (direct without save/translate)
           ctx.beginPath();
-          ctx.arc(0, 0, rad, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
 
           ctx.strokeStyle = outlineColor;
           ctx.lineWidth = 1.2;
@@ -3887,7 +3845,6 @@
           ctx.fillStyle = p.color;
           ctx.fill();
         }
-        ctx.restore();
       }
     }
     ctx.restore();
@@ -4108,7 +4065,17 @@
           State.equippedSkin = skin.id;
           State.isDirtyStorage = true;
           flushStateToStorage();
-          renderSkinsGrid();
+          const allCards = dom.skinsGrid.querySelectorAll('.skin-card');
+          allCards.forEach(c => c.classList.remove('active'));
+          card.classList.add('active');
+          const allBadges = dom.skinsGrid.querySelectorAll('.skin-badge');
+          BALL_SKINS.forEach((s, idx) => {
+            const badge = allBadges[idx];
+            if (badge) {
+              const unlocked = s.id === 'classic' || !!State.unlockedSkins[s.id];
+              badge.textContent = (s.id === State.equippedSkin) ? 'Equipped' : (unlocked ? 'Equip' : 'Locked 🔒');
+            }
+          });
         });
       }
 
@@ -4313,7 +4280,6 @@
         activeBall.x = activeBall.originX;
         activeBall.y = activeBall.originY;
       }
-      State.phase = 'IDLE';
       wakeGameLoop();
     }
   }
@@ -4402,33 +4368,21 @@
     dom.btnCloseSettings.addEventListener('click', () => dom.settingsModal.close());
 
     // Layout switch handlers
-    dom.btnLayoutLeft.addEventListener('click', () => {
-      if (State.hoopSide !== 'left') {
-        State.hoopSide = 'left';
+    function setHoopSide(side) {
+      if (State.hoopSide !== side) {
+        State.hoopSide = side;
         State.isDirtyStorage = true;
         flushStateToStorage();
         updateHUD();
-        resizeViewport();
+        resizeViewport(true);
         balls.length = 0;
         activeBall = null;
         spawnBall(true);
-        wakeGameLoop();
       }
-    });
+    }
 
-    dom.btnLayoutRight.addEventListener('click', () => {
-      if (State.hoopSide !== 'right') {
-        State.hoopSide = 'right';
-        State.isDirtyStorage = true;
-        flushStateToStorage();
-        updateHUD();
-        resizeViewport();
-        balls.length = 0;
-        activeBall = null;
-        spawnBall(true);
-        wakeGameLoop();
-      }
-    });
+    dom.btnLayoutLeft.addEventListener('click', () => setHoopSide('left'));
+    dom.btnLayoutRight.addEventListener('click', () => setHoopSide('right'));
 
     // Sound toggle in settings
     dom.toggleSound.addEventListener('change', (e) => {
