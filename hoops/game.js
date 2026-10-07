@@ -14,69 +14,97 @@
 
   const ACHIEVEMENTS_CATALOG = [
     {
-      id: 'first_basket',
-      title: 'First Blood',
-      desc: 'Score your first basket',
-      reward: 'Classic Skin Unlocked',
-      skinReward: 'classic'
-    },
-    {
-      id: 'clean_master',
-      title: 'Nothing But Net',
-      desc: 'Score 3 Clean Shots in a single session',
-      reward: 'Watermelon Skin Unlocked',
-      skinReward: 'watermelon'
-    },
-    {
-      id: 'streak_5',
-      title: 'Heating Up',
-      desc: 'Reach a 5-basket streak',
-      reward: 'Beach Ball Skin Unlocked',
-      skinReward: 'beachball'
-    },
-    {
       id: 'streak_10',
-      title: 'On Fire',
-      desc: 'Reach a 10-basket streak',
-      reward: 'Fire Ball Skin Unlocked',
-      skinReward: 'fire'
+      title: 'On a Roll',
+      desc: 'Reach an uninterrupted 10-basket streak',
+      reward: 'Beach Ball Skin Unlocked',
+      skinReward: 'beachball',
+      hidden: false
     },
     {
-      id: 'streak_20',
-      title: 'Unstoppable Legend',
-      desc: 'Reach a 20-basket streak',
-      reward: 'Crown Badge',
-      skinReward: null
+      id: 'clean_run_5',
+      title: 'Pure Silk',
+      desc: 'Score 5 Clean Shots in a single run',
+      reward: 'Watermelon Skin Unlocked',
+      skinReward: 'watermelon',
+      hidden: false
     },
     {
-      id: 'total_50',
-      title: 'Veteran Shooter',
-      desc: 'Score 50 lifetime baskets',
+      id: 'total_100',
+      title: 'Century Club',
+      desc: 'Score 100 total lifetime baskets',
       reward: '8-Ball Skin Unlocked',
-      skinReward: 'eightball'
+      skinReward: 'eightball',
+      hidden: false
+    },
+    {
+      id: 'wall_ricochet',
+      title: 'Sugar Rebound',
+      desc: 'Score a basket after bouncing off the opposite gym wall',
+      reward: 'Pink Donut Skin Unlocked',
+      skinReward: 'donut',
+      hidden: true
+    },
+    {
+      id: 'midas_streak_20',
+      title: 'The Midas Touch',
+      desc: 'Reach a legendary 20-basket streak',
+      reward: '24K Midas Skin Unlocked',
+      skinReward: 'gold',
+      hidden: false
+    },
+    {
+      id: 'stratosphere_swish',
+      title: 'Orbital Swish',
+      desc: 'Drain a clean swish from the Stratosphere (80+ ft arc)',
+      reward: 'Blue Plasma Skin Unlocked',
+      skinReward: 'fire_blue',
+      hidden: true
+    },
+    {
+      id: 'total_500',
+      title: 'Volcanic Master',
+      desc: 'Score 500 total lifetime baskets',
+      reward: 'Magma Blaze Skin Unlocked',
+      skinReward: 'fire',
+      hidden: false
+    },
+    {
+      id: 'speed_demon_5',
+      title: 'Speed Demon',
+      desc: 'Score 5 baskets within 5 seconds',
+      reward: 'Hot-Rod Fire Skin Unlocked',
+      skinReward: 'fire_hotrod',
+      hidden: false
     },
     {
       id: 'bank_shot',
       title: 'Off the Glass',
       desc: 'Score a basket after bouncing off the backboard',
       reward: 'Trickshot Badge',
-      skinReward: null
+      skinReward: null,
+      hidden: false
     },
     {
       id: 'downtown_sniper',
       title: 'From Downtown',
       desc: 'Drain a long bomb basket from 28+ feet away',
       reward: 'Sniper Badge',
-      skinReward: null
+      skinReward: null,
+      hidden: false
     }
   ];
 
   const BALL_SKINS = [
     { id: 'classic', name: 'Classic', desc: 'Standard orange leather' },
-    { id: 'watermelon', name: 'Watermelon', desc: 'Crisp green & summer stripes' },
     { id: 'beachball', name: 'Beach Ball', desc: 'Multi-color carnival stripes' },
-    { id: 'fire', name: 'Fire Ball', desc: 'Molten core with ember trail' },
-    { id: 'eightball', name: '8-Ball', desc: 'Deep glossy pool hall black' }
+    { id: 'watermelon', name: 'Watermelon', desc: 'Crisp green & summer stripes' },
+    { id: 'eightball', name: '8-Ball', desc: 'Deep glossy pool hall black' },
+    { id: 'donut', name: 'Pink Donut', desc: 'Strawberry frosting with rainbow sprinkles' },
+    { id: 'gold', name: '24K Midas', desc: 'Championship polished gold & white seams' },
+    { id: 'fire_blue', name: 'Blue Plasma', desc: 'Ghost blue electric fire & cyan trail' },
+    { id: 'fire', name: 'Magma Blaze', desc: 'Molten glowing lava seams & ember trail' },
+    { id: 'fire_hotrod', name: 'Hot-Rod Fire', desc: 'Comic flame wrap & long yellow-black trail' }
   ];
 
   // Progressive Streak Difficulty Tiers (gradual shortening of trajectory arc & static atmosphere colors)
@@ -254,12 +282,41 @@
     } catch (e) {
       // Storage unavailable or disabled; keep defaults
     }
-    // Always guarantee classic skin is unlocked and valid
-    State.unlockedSkins.classic = true;
+    // Classic skin is always unlocked
+    State.unlockedSkins = { classic: true };
+
+    // Synchronize skin unlocks strictly with completed achievements
+    ACHIEVEMENTS_CATALOG.forEach(ach => {
+      if (ach.skinReward && State.achievements[ach.id]) {
+        State.unlockedSkins[ach.skinReward] = true;
+      }
+    });
+
+    // Retroactively award milestone achievements if player already reached stats
+    if (State.lifetimeBaskets >= 500) {
+      State.achievements['total_500'] = Date.now();
+      State.unlockedSkins['fire'] = true;
+    }
+    if (State.lifetimeBaskets >= 100) {
+      State.achievements['total_100'] = Date.now();
+      State.unlockedSkins['eightball'] = true;
+    }
+    if (State.bestStreak >= 20) {
+      State.achievements['midas_streak_20'] = Date.now();
+      State.unlockedSkins['gold'] = true;
+    }
+    if (State.bestStreak >= 10) {
+      State.achievements['streak_10'] = Date.now();
+      State.unlockedSkins['beachball'] = true;
+    }
+
     if (!State.unlockedSkins[State.equippedSkin]) {
       State.equippedSkin = 'classic';
     }
   }
+
+  // Rapid basket tracker for "Speed Demon" achievement (5 baskets in 5 seconds)
+  let recentBasketTimes = [];
 
   let storageFlushTimer = null;
   function scheduleStorageFlush() {
@@ -717,7 +774,7 @@
   const RESTITUTION_FLOOR = 0.58;
 
   // Object pooling for particles
-  const MAX_PARTICLES = 70;
+  const MAX_PARTICLES = 160;
   const particlePool = [];
   for (let i = 0; i < MAX_PARTICLES; i++) {
     particlePool.push({
@@ -1306,18 +1363,75 @@
           b.vy *= (1 - 0.12 * subDt);
         }
 
-        // Trailing embers for Fire Ball skin
-        if (State.equippedSkin === 'fire' && Math.hypot(b.vx, b.vy) > 220) {
-          if (Math.random() < 0.3) {
-            spawnParticle(
-              b.x + (Math.random() * 10 - 5),
-              b.y + (Math.random() * 10 - 5),
-              (Math.random() - 0.5) * 50 - b.vx * 0.1,
-              (Math.random() - 0.5) * 50 - b.vy * 0.1,
-              Math.random() * 3 + 2,
-              Math.random() > 0.4 ? '#f59e0b' : '#ef4444',
-              0.45
-            );
+        // Trailing embers for Fire Ball skins (active during flight throughout full arc, eliminating apex dead zones)
+        const ballSpeed = Math.hypot(b.vx, b.vy);
+        const isAirborne = b.isLaunched && !b.shotData.resolved && (ballSpeed > 55 || b.y < floorY - b.radius - 15);
+
+        if (typeof State.equippedSkin === 'string' && State.equippedSkin.startsWith('fire') && isAirborne) {
+          b.trailTimer = (b.trailTimer || 0) + subDt;
+          const isHotRod = State.equippedSkin === 'fire_hotrod';
+          const isBlue = State.equippedSkin === 'fire_blue';
+
+          if (isHotRod) {
+            // Whacky stuttering hot-rod exhaust:
+            // Fast playful cycles (~95ms total: 60ms active puffing, 35ms quick whacky gap)
+            const cycle = 0.095;
+            const cycleTime = b.trailTimer % cycle;
+            const inBurst = cycleTime < 0.060; // 60ms burst, 35ms micro-break
+
+            if (inBurst) {
+              // Throttle to 1 particle per ~12ms during the burst phase for dense comic clusters
+              if (!b.lastParticleTime || (b.trailTimer - b.lastParticleTime) >= 0.012) {
+                b.lastParticleTime = b.trailTimer;
+
+                const isDark = Math.random() < 0.45;
+                const color = isDark
+                  ? (Math.random() > 0.5 ? '#18181b' : '#0a0f1d') // Comic charcoal/smoke
+                  : (Math.random() > 0.5 ? '#fde047' : '#fef08a'); // Electric canary yellow
+
+                // Whacky variation: 15% chance of chunky comic puff!
+                const isChunky = Math.random() < 0.15;
+                const pRadius = isChunky ? (Math.random() * 2.2 + 4.5) : (Math.random() * 2.5 + 2.0);
+
+                // Slight lateral sputtering pop perpendicular to ball velocity
+                const normalX = -b.vy / (ballSpeed || 1);
+                const normalY = b.vx / (ballSpeed || 1);
+                const popSide = (Math.random() - 0.5) * 45;
+
+                spawnParticle(
+                  b.x + (Math.random() * 10 - 5),
+                  b.y + (Math.random() * 10 - 5),
+                  normalX * popSide - b.vx * 0.06 + (Math.random() - 0.5) * 20,
+                  normalY * popSide - b.vy * 0.06 + (Math.random() - 0.5) * 20,
+                  pRadius,
+                  color,
+                  1.35 // 3x longer lingering tail than standard 0.45s
+                );
+              }
+            }
+          } else {
+            // Magma Blaze / Blue Plasma: lively continuous embers with rhythmic micro-pulses
+            const cycle = 0.080;
+            const cycleTime = b.trailTimer % cycle;
+            const inBurst = cycleTime < 0.055; // 55ms emission, 25ms micro-break
+
+            if (inBurst) {
+              if (!b.lastParticleTime || (b.trailTimer - b.lastParticleTime) >= 0.016) {
+                b.lastParticleTime = b.trailTimer;
+                const emberColor = isBlue
+                  ? (Math.random() > 0.4 ? '#38bdf8' : '#06b6d4')
+                  : (Math.random() > 0.4 ? '#f59e0b' : '#ef4444');
+                spawnParticle(
+                  b.x + (Math.random() * 8 - 4),
+                  b.y + (Math.random() * 8 - 4),
+                  (Math.random() - 0.5) * 40 - b.vx * 0.08,
+                  (Math.random() - 0.5) * 40 - b.vy * 0.08,
+                  Math.random() * 2.8 + 1.8,
+                  emberColor,
+                  0.45
+                );
+              }
+            }
           }
         }
 
@@ -1366,12 +1480,22 @@
         // Left Wall
         if (b.x - b.radius <= 0 && b.y > 0) {
           b.x = b.radius;
-          if (b.vx < 0) b.vx = -b.vx * 0.5;
+          if (b.vx < 0) {
+            b.vx = -b.vx * 0.5;
+            if (State.hoopSide === 'right') {
+              b.shotData.hitOppositeWall = true;
+            }
+          }
         }
         // Right Gym Wall
         if (b.x + b.radius >= width && b.y > 0) {
           b.x = width - b.radius;
-          if (b.vx > 0) b.vx = -b.vx * 0.5;
+          if (b.vx > 0) {
+            b.vx = -b.vx * 0.5;
+            if (State.hoopSide === 'left') {
+              b.shotData.hitOppositeWall = true;
+            }
+          }
         }
         // Extreme ceiling safety
         if (b.y < -15000) {
@@ -1980,22 +2104,50 @@
     }
 
     // Achievements Evaluation
-    unlockAchievement('first_basket');
-    if (State.sessionCleanShots >= 3) {
-      unlockAchievement('clean_master');
+    // 1. Hot-Rod Fire: 5 baskets within 5 seconds
+    const nowMs = performance.now();
+    recentBasketTimes.push(nowMs);
+    recentBasketTimes = recentBasketTimes.filter(t => nowMs - t <= 5000);
+    if (recentBasketTimes.length >= 5) {
+      unlockAchievement('speed_demon_5');
     }
-    if (State.streak >= 5) {
-      unlockAchievement('streak_5');
-    }
+
+    // 2. Beach Ball: 10 Streak
     if (State.streak >= 10) {
       unlockAchievement('streak_10');
     }
+
+    // 3. 24K Midas: 20 Streak
     if (State.streak >= 20) {
-      unlockAchievement('streak_20');
+      unlockAchievement('midas_streak_20');
     }
-    if (State.lifetimeBaskets >= 50) {
-      unlockAchievement('total_50');
+
+    // 4. Watermelon: 5 Clean Shots in single run
+    if (State.sessionCleanShots >= 5) {
+      unlockAchievement('clean_run_5');
     }
+
+    // 5. 8-Ball: 100 Lifetime Baskets
+    if (State.lifetimeBaskets >= 100) {
+      unlockAchievement('total_100');
+    }
+
+    // 6. Magma Blaze: 500 Lifetime Baskets
+    if (State.lifetimeBaskets >= 500) {
+      unlockAchievement('total_500');
+    }
+
+    // 7. Blue Plasma (Hidden): Stratosphere Swish (apex >= 80 FT + clean swish)
+    if (isClean && isOffscreen && apexFeet >= 80) {
+      unlockAchievement('stratosphere_swish');
+    }
+
+    // 8. Pink Donut (Hidden): Score after bouncing off opposite gym wall
+    if (b.shotData.hitOppositeWall) {
+      unlockAchievement('wall_ricochet');
+    }
+
+    // Badges
     if (isBank) {
       unlockAchievement('bank_shot');
     }
@@ -2069,6 +2221,18 @@
         break;
       case 'fire':
         renderFireSkin(targetCtx, r);
+        break;
+      case 'fire_hotrod':
+        renderHotRodSkin(targetCtx, r);
+        break;
+      case 'fire_blue':
+        renderBlueFireSkin(targetCtx, r);
+        break;
+      case 'donut':
+        renderDonutSkin(targetCtx, r);
+        break;
+      case 'gold':
+        renderGoldSkin(targetCtx, r);
         break;
       case 'eightball':
         renderEightBallSkin(targetCtx, r);
@@ -2267,11 +2431,11 @@
   }
 
   function renderFireSkin(c, r) {
-    // 1. Comic Anime/Manga Fire core
-    const grad = c.createRadialGradient(-r * 0.2, -r * 0.2, r * 0.05, 0, 0, r);
+    // 1. Saturated Molten Lava Base (incandescent lemon to volcanic ruby)
+    const grad = c.createRadialGradient(-r * 0.25, -r * 0.25, r * 0.05, 0, 0, r);
     grad.addColorStop(0, '#fef08a');
     grad.addColorStop(0.3, '#f97316');
-    grad.addColorStop(0.75, '#ef4444');
+    grad.addColorStop(0.7, '#dc2626');
     grad.addColorStop(1, '#7f1d1d');
 
     c.beginPath();
@@ -2279,43 +2443,400 @@
     c.fillStyle = grad;
     c.fill();
 
-    // 2. Swirling comic flame tongues with ink accents
-    c.strokeStyle = '#0a0f1d';
-    c.lineWidth = r * 0.12;
-    c.lineCap = 'round';
+    c.save();
     c.beginPath();
-    c.arc(0, 0, r * 0.58, 0.15, Math.PI * 0.95);
-    c.stroke();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.clip();
 
-    c.strokeStyle = '#fef08a';
-    c.lineWidth = r * 0.08;
+    // 2. Volcanic Cel-Shaded Shadow Crescent
+    const shadowGrad = c.createRadialGradient(r * 0.45, r * 0.45, r * 0.1, r * 0.45, r * 0.45, r * 1.05);
+    shadowGrad.addColorStop(0, 'rgba(69, 10, 10, 0.7)');
+    shadowGrad.addColorStop(1, 'rgba(69, 10, 10, 0)');
     c.beginPath();
-    c.arc(0, 0, r * 0.58, 0.2, Math.PI * 0.9);
-    c.stroke();
-
-    c.strokeStyle = '#0a0f1d';
-    c.lineWidth = r * 0.12;
-    c.beginPath();
-    c.arc(0, 0, r * 0.72, Math.PI * 1.08, Math.PI * 1.88);
-    c.stroke();
-
-    c.strokeStyle = '#fde047';
-    c.lineWidth = r * 0.08;
-    c.beginPath();
-    c.arc(0, 0, r * 0.72, Math.PI * 1.1, Math.PI * 1.85);
-    c.stroke();
-
-    // Inner fiery bloom & glint
-    c.beginPath();
-    c.arc(-r * 0.15, -r * 0.15, r * 0.35, 0, Math.PI * 2);
-    c.fillStyle = 'rgba(254, 240, 138, 0.65)';
+    c.arc(r * 0.35, r * 0.35, r * 0.95, 0, Math.PI * 2);
+    c.fillStyle = shadowGrad;
     c.fill();
 
-    // Starburst comic glint
+    // 3. Crackling Molten Lava Basketball Seams
+    function drawSeams() {
+      c.beginPath();
+      c.moveTo(-r, 0); c.lineTo(r, 0);
+      c.moveTo(0, -r); c.lineTo(0, r);
+      c.stroke();
+      c.beginPath();
+      c.arc(-r * 0.95, 0, r * 0.75, -Math.PI * 0.35, Math.PI * 0.35);
+      c.stroke();
+      c.beginPath();
+      c.arc(r * 0.95, 0, r * 0.75, Math.PI * 0.65, Math.PI * 1.35);
+      c.stroke();
+    }
+
+    // Layer 1: Dark Obsidian Midnight Ink Fissures
+    c.lineCap = 'round';
+    c.strokeStyle = '#0a0f1d';
+    c.lineWidth = Math.max(3.2, r * 0.13);
+    drawSeams();
+
+    // Layer 2: Electric Blazing Flame Orange Glow
+    c.strokeStyle = '#ea580c';
+    c.lineWidth = Math.max(2.0, r * 0.08);
+    drawSeams();
+
+    // Layer 3: White-Hot Incandescent Lava Center
+    c.strokeStyle = '#fffbeb';
+    c.lineWidth = Math.max(1.1, r * 0.038);
+    drawSeams();
+
+    // 4. Iconic Pop Specular Shine (upper-left arc + dot)
     c.beginPath();
-    c.arc(-r * 0.35, -r * 0.35, r * 0.15, 0, Math.PI * 2);
+    c.arc(-r * 0.15, -r * 0.15, r * 0.62, -Math.PI * 0.88, -Math.PI * 0.38);
+    c.strokeStyle = 'rgba(255, 255, 255, 0.88)';
+    c.lineWidth = Math.max(2.5, r * 0.095);
+    c.stroke();
+
+    c.beginPath();
+    c.arc(-r * 0.52, -r * 0.52, Math.max(1.6, r * 0.08), 0, Math.PI * 2);
     c.fillStyle = '#ffffff';
     c.fill();
+
+    c.restore();
+  }
+
+  function renderHotRodSkin(c, r) {
+    // 1. Sleek Midnight Slate Sphere
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.fillStyle = '#0f172a';
+    c.fill();
+
+    c.save();
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.clip();
+
+    // Cel shadow
+    const shadowGrad = c.createRadialGradient(r * 0.45, r * 0.45, r * 0.1, r * 0.45, r * 0.45, r * 1.05);
+    shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.6)');
+    shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    c.beginPath();
+    c.arc(r * 0.35, r * 0.35, r * 0.95, 0, Math.PI * 2);
+    c.fillStyle = shadowGrad;
+    c.fill();
+
+    // 2. Connected Classic Comic Flame Wrap (rising from bottom across the sphere)
+    c.beginPath();
+    c.moveTo(-r, r * 0.2);
+    c.quadraticCurveTo(-r * 0.8, -r * 0.1, -r * 0.5, -r * 0.55); // Left Flame Tip
+    c.quadraticCurveTo(-r * 0.25, -r * 0.1, -r * 0.1, -r * 0.25); // Left Notch
+    c.quadraticCurveTo(0, -r * 0.75, r * 0.15, -r * 0.8); // Center High Flame Tip
+    c.quadraticCurveTo(r * 0.2, -r * 0.15, r * 0.35, -r * 0.2); // Right Notch
+    c.quadraticCurveTo(r * 0.6, -r * 0.5, r * 0.75, -r * 0.35); // Right Flame Tip
+    c.quadraticCurveTo(r * 0.85, 0, r, r * 0.2);
+    c.lineTo(r, r);
+    c.lineTo(-r, r);
+    c.closePath();
+    c.fillStyle = '#ea580c';
+    c.fill();
+    c.strokeStyle = '#0a0f1d';
+    c.lineWidth = Math.max(2.4, r * 0.09);
+    c.stroke();
+
+    // Inner Flame: Bright Canary Yellow
+    c.beginPath();
+    c.moveTo(-r * 0.9, r * 0.35);
+    c.quadraticCurveTo(-r * 0.7, 0, -r * 0.48, -r * 0.42); // Left Inner Tip
+    c.quadraticCurveTo(-r * 0.25, 0, -r * 0.1, -r * 0.12);
+    c.quadraticCurveTo(0, -r * 0.6, r * 0.14, -r * 0.65); // Center Inner Tip
+    c.quadraticCurveTo(r * 0.18, -r * 0.05, r * 0.32, -r * 0.1);
+    c.quadraticCurveTo(r * 0.55, -r * 0.35, r * 0.68, -r * 0.22); // Right Inner Tip
+    c.quadraticCurveTo(r * 0.75, 0.1, r * 0.9, r * 0.35);
+    c.lineTo(r * 0.9, r);
+    c.lineTo(-r * 0.9, r);
+    c.closePath();
+    c.fillStyle = '#fde047';
+    c.fill();
+
+    // White-hot center lick
+    c.beginPath();
+    c.arc(0.05 * r, 0.1 * r, r * 0.22, 0, Math.PI * 2);
+    c.fillStyle = '#ffffff';
+    c.fill();
+
+    // Specular shine arc + dot
+    c.beginPath();
+    c.arc(-r * 0.15, -r * 0.15, r * 0.62, -Math.PI * 0.88, -Math.PI * 0.38);
+    c.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    c.lineWidth = Math.max(2.4, r * 0.09);
+    c.lineCap = 'round';
+    c.stroke();
+
+    c.beginPath();
+    c.arc(-r * 0.52, -r * 0.52, Math.max(1.6, r * 0.08), 0, Math.PI * 2);
+    c.fillStyle = '#ffffff';
+    c.fill();
+
+    c.restore();
+  }
+
+  function renderBlueFireSkin(c, r) {
+    // 1. Cool Electric Plasma Base
+    const grad = c.createRadialGradient(-r * 0.25, -r * 0.25, r * 0.05, 0, 0, r);
+    grad.addColorStop(0, '#ecfeff');
+    grad.addColorStop(0.3, '#38bdf8');
+    grad.addColorStop(0.7, '#0284c7');
+    grad.addColorStop(1, '#0f172a');
+
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.fillStyle = grad;
+    c.fill();
+
+    c.save();
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.clip();
+
+    // Cel Shadow
+    const shadowGrad = c.createRadialGradient(r * 0.45, r * 0.45, r * 0.1, r * 0.45, r * 0.45, r * 1.05);
+    shadowGrad.addColorStop(0, 'rgba(15, 23, 42, 0.7)');
+    shadowGrad.addColorStop(1, 'rgba(15, 23, 42, 0)');
+    c.beginPath();
+    c.arc(r * 0.35, r * 0.35, r * 0.95, 0, Math.PI * 2);
+    c.fillStyle = shadowGrad;
+    c.fill();
+
+    // 2. Crackling Electric Blue Basketball Seams
+    function drawSeams() {
+      c.beginPath();
+      c.moveTo(-r, 0); c.lineTo(r, 0);
+      c.moveTo(0, -r); c.lineTo(0, r);
+      c.stroke();
+      c.beginPath();
+      c.arc(-r * 0.95, 0, r * 0.75, -Math.PI * 0.35, Math.PI * 0.35);
+      c.stroke();
+      c.beginPath();
+      c.arc(r * 0.95, 0, r * 0.75, Math.PI * 0.65, Math.PI * 1.35);
+      c.stroke();
+    }
+
+    c.lineCap = 'round';
+    c.strokeStyle = '#0a0f1d';
+    c.lineWidth = Math.max(3.2, r * 0.13);
+    drawSeams();
+
+    c.strokeStyle = '#0284c7';
+    c.lineWidth = Math.max(2.0, r * 0.08);
+    drawSeams();
+
+    c.strokeStyle = '#cffafe';
+    c.lineWidth = Math.max(1.1, r * 0.038);
+    drawSeams();
+
+    // Pop shine
+    c.beginPath();
+    c.arc(-r * 0.15, -r * 0.15, r * 0.62, -Math.PI * 0.88, -Math.PI * 0.38);
+    c.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+    c.lineWidth = Math.max(2.5, r * 0.095);
+    c.stroke();
+
+    c.beginPath();
+    c.arc(-r * 0.52, -r * 0.52, Math.max(1.6, r * 0.08), 0, Math.PI * 2);
+    c.fillStyle = '#ffffff';
+    c.fill();
+
+    c.restore();
+  }
+
+  function renderDonutSkin(c, r) {
+    // 1. Golden-baked Dough Base
+    const doughGrad = c.createRadialGradient(-r * 0.25, -r * 0.25, r * 0.1, 0, 0, r);
+    doughGrad.addColorStop(0, '#fef3c7');
+    doughGrad.addColorStop(0.5, '#f59e0b');
+    doughGrad.addColorStop(1, '#b45309');
+
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.fillStyle = doughGrad;
+    c.fill();
+
+    c.save();
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.clip();
+
+    // 2. Glossy Pop-Art Strawberry Frosting with undulating comic drips
+    c.beginPath();
+    const drips = [
+      [0.82, -0.2], [0.72, 0.35], [0.45, 0.72], [0.0, 0.78],
+      [-0.45, 0.7], [-0.72, 0.35], [-0.82, -0.2], [-0.5, -0.7],
+      [0.0, -0.82], [0.5, -0.7]
+    ];
+    c.moveTo(drips[0][0] * r, drips[0][1] * r);
+    for (let i = 0; i < drips.length; i++) {
+      const next = drips[(i + 1) % drips.length];
+      const midX = (drips[i][0] + next[0]) * 0.5 * r;
+      const midY = (drips[i][1] + next[1]) * 0.5 * r;
+      c.quadraticCurveTo(drips[i][0] * r, drips[i][1] * r, midX, midY);
+    }
+    c.closePath();
+
+    const frostGrad = c.createRadialGradient(-r * 0.2, -r * 0.2, r * 0.1, 0, 0, r * 0.85);
+    frostGrad.addColorStop(0, '#fda4af');
+    frostGrad.addColorStop(0.4, '#fb7185');
+    frostGrad.addColorStop(1, '#e11d48');
+    c.fillStyle = frostGrad;
+    c.fill();
+    c.strokeStyle = '#0a0f1d';
+    c.lineWidth = Math.max(2.2, r * 0.088);
+    c.stroke();
+
+    // 3. Center Donut Hole with baked inner depth
+    c.beginPath();
+    c.arc(0, 0, r * 0.3, 0, Math.PI * 2);
+    c.fillStyle = '#78350f';
+    c.fill();
+    c.strokeStyle = '#0a0f1d';
+    c.lineWidth = Math.max(2.2, r * 0.088);
+    c.stroke();
+
+    c.beginPath();
+    c.arc(r * 0.04, r * 0.04, r * 0.26, 0, Math.PI * 2);
+    c.fillStyle = '#451a03';
+    c.fill();
+
+    // 4. Colorful Rainbow Comic Sprinkles (Jimmies)
+    const sprinkles = [
+      { x: -0.45, y: -0.42, a: 0.6, col: '#fde047' },  // Yellow
+      { x: 0.38,  y: -0.45, a: -0.5, col: '#38bdf8' }, // Cyan
+      { x: -0.52, y: 0.12,  a: 0.2, col: '#4ade80' },  // Lime
+      { x: 0.48,  y: 0.15,  a: 0.8, col: '#ffffff' },  // White
+      { x: -0.22, y: 0.52,  a: -0.4, col: '#fde047' }, // Yellow
+      { x: 0.25,  y: 0.52,  a: 0.3, col: '#c084fc' },  // Purple
+      { x: -0.05, y: -0.55, a: 1.2, col: '#ffffff' },  // White
+      { x: 0.52,  y: -0.15, a: -0.8, col: '#4ade80' }  // Lime
+    ];
+
+    sprinkles.forEach(s => {
+      c.save();
+      c.translate(s.x * r, s.y * r);
+      c.rotate(s.a);
+      c.beginPath();
+      const sw = Math.max(1.8, r * 0.075);
+      const sl = Math.max(4.2, r * 0.22);
+      if (typeof c.roundRect === 'function') {
+        c.roundRect(-sl / 2, -sw / 2, sl, sw, sw / 2);
+      } else {
+        c.rect(-sl / 2, -sw / 2, sl, sw);
+      }
+      c.fillStyle = s.col;
+      c.fill();
+      c.strokeStyle = '#0a0f1d';
+      c.lineWidth = 1.1;
+      c.stroke();
+      c.restore();
+    });
+
+    // 5. Glossy Specular Shine Arc on Frosting
+    c.beginPath();
+    c.arc(-r * 0.15, -r * 0.15, r * 0.62, -Math.PI * 0.88, -Math.PI * 0.38);
+    c.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    c.lineWidth = Math.max(2.4, r * 0.09);
+    c.lineCap = 'round';
+    c.stroke();
+
+    c.restore();
+  }
+
+  function renderGoldSkin(c, r) {
+    // 1. Saturated 24K Metallic Gold Base
+    const goldGrad = c.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.05, 0, 0, r);
+    goldGrad.addColorStop(0, '#fef9c3');
+    goldGrad.addColorStop(0.25, '#fde047');
+    goldGrad.addColorStop(0.55, '#eab308');
+    goldGrad.addColorStop(0.85, '#ca8a04');
+    goldGrad.addColorStop(1, '#854d0e');
+
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.fillStyle = goldGrad;
+    c.fill();
+
+    c.save();
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.clip();
+
+    // 2. Rich Bronze Cel-Shaded Shadow Crescent
+    const shadowGrad = c.createRadialGradient(r * 0.45, r * 0.45, r * 0.1, r * 0.45, r * 0.45, r * 1.05);
+    shadowGrad.addColorStop(0, 'rgba(113, 63, 18, 0.75)');
+    shadowGrad.addColorStop(1, 'rgba(113, 63, 18, 0)');
+    c.beginPath();
+    c.arc(r * 0.35, r * 0.35, r * 0.95, 0, Math.PI * 2);
+    c.fillStyle = shadowGrad;
+    c.fill();
+
+    // 3. Championship Pure White Enamel Seams
+    function drawSeams() {
+      c.beginPath();
+      c.moveTo(-r, 0); c.lineTo(r, 0);
+      c.moveTo(0, -r); c.lineTo(0, r);
+      c.stroke();
+      c.beginPath();
+      c.arc(-r * 0.95, 0, r * 0.75, -Math.PI * 0.35, Math.PI * 0.35);
+      c.stroke();
+      c.beginPath();
+      c.arc(r * 0.95, 0, r * 0.75, Math.PI * 0.65, Math.PI * 1.35);
+      c.stroke();
+    }
+
+    // Outer Midnight Ink Border
+    c.lineCap = 'round';
+    c.strokeStyle = '#0a0f1d';
+    c.lineWidth = Math.max(3.4, r * 0.14);
+    drawSeams();
+
+    // Inner White Enamel Ribs
+    c.strokeStyle = '#ffffff';
+    c.lineWidth = Math.max(2.2, r * 0.088);
+    drawSeams();
+
+    // 4. Comic 4-Point Starburst Glint (✦) at Upper Highlight
+    const sx = -r * 0.38, sy = -r * 0.38;
+    c.beginPath();
+    c.moveTo(sx, sy - r * 0.32);
+    c.quadraticCurveTo(sx, sy, sx + r * 0.32, sy);
+    c.quadraticCurveTo(sx, sy, sx, sy + r * 0.32);
+    c.quadraticCurveTo(sx, sy, sx - r * 0.32, sy);
+    c.quadraticCurveTo(sx, sy, sx, sy - r * 0.32);
+    c.closePath();
+    c.fillStyle = '#ffffff';
+    c.fill();
+
+    c.beginPath();
+    c.arc(sx, sy, Math.max(2, r * 0.08), 0, Math.PI * 2);
+    c.fillStyle = '#ffffff';
+    c.fill();
+
+    // Specular shine arc
+    c.beginPath();
+    c.arc(-r * 0.15, -r * 0.15, r * 0.62, -Math.PI * 0.88, -Math.PI * 0.38);
+    c.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    c.lineWidth = Math.max(2.5, r * 0.095);
+    c.stroke();
+
+    // Small sparkle on right
+    const sx2 = r * 0.45, sy2 = -r * 0.25;
+    c.beginPath();
+    c.moveTo(sx2, sy2 - r * 0.18);
+    c.quadraticCurveTo(sx2, sy2, sx2 + r * 0.18, sy2);
+    c.quadraticCurveTo(sx2, sy2, sx2, sy2 + r * 0.18);
+    c.quadraticCurveTo(sx2, sy2, sx2 - r * 0.18, sy2);
+    c.quadraticCurveTo(sx2, sy2, sx2, sy2 - r * 0.18);
+    c.closePath();
+    c.fillStyle = '#ffffff';
+    c.fill();
+
+    c.restore();
   }
 
   function renderEightBallSkin(c, r) {
@@ -2917,6 +3438,9 @@
         ctx.translate(p.x, p.y);
         ctx.globalAlpha = alpha;
 
+        const isDarkSmoke = p.color === '#18181b' || p.color === '#0a0f1d';
+        const outlineColor = isDarkSmoke ? 'rgba(255, 255, 255, 0.45)' : '#0a0f1d';
+
         // Alternate between comic 4-point starburst glints and comic action dots!
         if (i % 2 === 0 && rad > 2.5) {
           // 4-point comic sparkle
@@ -2929,7 +3453,7 @@
           ctx.quadraticCurveTo(0, 0, 0, -s);
           ctx.closePath();
 
-          ctx.strokeStyle = '#0a0f1d';
+          ctx.strokeStyle = outlineColor;
           ctx.lineWidth = 1.2;
           ctx.stroke();
 
@@ -2940,7 +3464,7 @@
           ctx.beginPath();
           ctx.arc(0, 0, rad, 0, Math.PI * 2);
 
-          ctx.strokeStyle = '#0a0f1d';
+          ctx.strokeStyle = outlineColor;
           ctx.lineWidth = 1.2;
           ctx.stroke();
 
@@ -3121,7 +3645,8 @@
     dom.skinsGrid.innerHTML = '';
 
     BALL_SKINS.forEach(skin => {
-      const isUnlocked = !!State.unlockedSkins[skin.id];
+      const ach = ACHIEVEMENTS_CATALOG.find(a => a.skinReward === skin.id);
+      const isUnlocked = skin.id === 'classic' || !!State.unlockedSkins[skin.id];
       const isEquipped = State.equippedSkin === skin.id;
 
       const card = document.createElement('div');
@@ -3143,12 +3668,23 @@
       nameEl.className = 'skin-name';
       nameEl.textContent = skin.name;
 
+      const descEl = document.createElement('div');
+      descEl.className = 'skin-condition';
+      if (isUnlocked) {
+        descEl.textContent = skin.desc;
+      } else if (ach) {
+        descEl.textContent = ach.hidden ? 'Secret Mystery 🔒' : `Unlock: ${ach.desc}`;
+      } else {
+        descEl.textContent = skin.desc;
+      }
+
       const badgeEl = document.createElement('div');
       badgeEl.className = 'skin-badge';
       badgeEl.textContent = isEquipped ? 'Equipped' : (isUnlocked ? 'Equip' : 'Locked 🔒');
 
       card.appendChild(previewWrap);
       card.appendChild(nameEl);
+      card.appendChild(descEl);
       card.appendChild(badgeEl);
 
       if (isUnlocked) {
@@ -3201,22 +3737,29 @@
 
       const titleEl = document.createElement('div');
       titleEl.className = 'ach-title';
-      titleEl.textContent = ach.title;
 
       const descEl = document.createElement('div');
       descEl.className = 'ach-desc';
-      descEl.textContent = ach.desc;
 
       const rewardEl = document.createElement('div');
       rewardEl.className = 'ach-reward';
-      rewardEl.textContent = ach.reward;
-
-      infoBox.append(titleEl, descEl, rewardEl);
 
       const statusEl = document.createElement('div');
       statusEl.className = 'ach-status';
-      statusEl.textContent = isUnlocked ? '✓ Done' : 'Locked';
 
+      if (ach.hidden && !isUnlocked) {
+        titleEl.textContent = 'Secret Achievement 🔒';
+        descEl.textContent = 'Keep shooting to discover this hidden trickshot feat';
+        rewardEl.textContent = '??? Mystery Ball Skin';
+        statusEl.textContent = 'Hidden';
+      } else {
+        titleEl.textContent = ach.title;
+        descEl.textContent = ach.desc;
+        rewardEl.textContent = ach.reward;
+        statusEl.textContent = isUnlocked ? '✓ Done' : 'Locked';
+      }
+
+      infoBox.append(titleEl, descEl, rewardEl);
       item.append(iconBox, infoBox, statusEl);
       dom.achievementsList.appendChild(item);
     });
