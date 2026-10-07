@@ -200,6 +200,7 @@
     score: 0,
     streak: 0,
     sessionCleanShots: 0,
+    lastScoredBallId: 0,
     announcedHighScore: false,
     isDirtyStorage: false,
     isPseudoFullscreen: false,
@@ -1061,6 +1062,7 @@
   function createBall(x, y, animate = true) {
     return {
       id: nextBallId++,
+      missHandled: false,
       x: x,
       y: y,
       vx: 0,
@@ -1501,7 +1503,10 @@
             b.floorBounces = (b.floorBounces || 0) + 1;
 
             // Instantly break active streak on floor contact (playground rules: floor bounce doesn't continue streak)
-            if (State.streak > 0 && !b.shotData.scored && !b.shotData.resolved) {
+            // A previous ball superseded by a newer scoring ball cannot cancel the active streak!
+            const isSuperseded = (State.lastScoredBallId && b.id <= State.lastScoredBallId);
+            if (!isSuperseded && !b.missHandled && State.streak > 0 && !b.shotData.scored && !b.shotData.resolved) {
+              b.missHandled = true;
               State.streak = 0;
               State.sessionCleanShots = 0;
               updateHUD();
@@ -1908,6 +1913,7 @@
     const isRattle = shot.rimHits >= 2;
     shot.isClean = isClean;
 
+    State.lastScoredBallId = b.id;
     State.streak++;
     if (State.streak > State.bestStreak) {
       State.bestStreak = State.streak;
@@ -2230,6 +2236,16 @@
     if (b.shotData.resolved) return;
     b.shotData.resolved = true;
     b.lifeAfterResolve = 0;
+
+    // If a newer ball has ALREADY scored since this ball was launched,
+    // this previous ball is obsolete and MUST NOT cancel the active streak or score!
+    if (State.lastScoredBallId && b.id <= State.lastScoredBallId) {
+      return;
+    }
+
+    // Prevent a single ball from triggering miss / streak reset multiple times
+    if (b.missHandled) return;
+    b.missHandled = true;
 
     // Miss: Run ends, streak and current score reset!
     if (State.score > 0) {
