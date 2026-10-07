@@ -81,16 +81,16 @@
       id: 'bank_shot',
       title: 'Off the Glass',
       desc: 'Score a basket after bouncing off the backboard',
-      reward: 'Trickshot Badge',
-      skinReward: null,
+      reward: 'Prism Crystal Skin Unlocked',
+      skinReward: 'crystal',
       hidden: false
     },
     {
       id: 'downtown_sniper',
       title: 'From Downtown',
       desc: 'Drain a long bomb basket from 28+ feet away',
-      reward: 'Sniper Badge',
-      skinReward: null,
+      reward: 'Tactical Sniper Skin Unlocked',
+      skinReward: 'sniper',
       hidden: false
     }
   ];
@@ -101,6 +101,8 @@
     { id: 'watermelon', name: 'Watermelon', desc: 'Crisp green & summer stripes' },
     { id: 'eightball', name: '8-Ball', desc: 'Deep glossy pool hall black' },
     { id: 'donut', name: 'Pink Donut', desc: 'Strawberry frosting with rainbow sprinkles' },
+    { id: 'sniper', name: 'Tactical Sniper', desc: 'Matte carbon stealth & neon laser crosshair' },
+    { id: 'crystal', name: 'Prism Crystal', desc: 'Faceted diamond glass & prismatic refractions' },
     { id: 'gold', name: '24K Midas', desc: 'Championship polished gold & white seams' },
     { id: 'fire_blue', name: 'Blue Plasma', desc: 'Ghost blue electric fire & cyan trail' },
     { id: 'fire', name: 'Magma Blaze', desc: 'Molten glowing lava seams & ember trail' },
@@ -308,6 +310,14 @@
     if (State.bestStreak >= 10) {
       State.achievements['streak_10'] = Date.now();
       State.unlockedSkins['beachball'] = true;
+    }
+    if (State.longestShot >= 28) {
+      State.achievements['downtown_sniper'] = Date.now();
+      State.unlockedSkins['sniper'] = true;
+    }
+    if (State.lifetimeBankShots >= 1) {
+      State.achievements['bank_shot'] = Date.now();
+      State.unlockedSkins['crystal'] = true;
     }
 
     if (!State.unlockedSkins[State.equippedSkin]) {
@@ -2231,6 +2241,12 @@
       case 'donut':
         renderDonutSkin(targetCtx, r);
         break;
+      case 'sniper':
+        renderSniperSkin(targetCtx, r);
+        break;
+      case 'crystal':
+        renderCrystalSkin(targetCtx, r);
+        break;
       case 'gold':
         renderGoldSkin(targetCtx, r);
         break;
@@ -2741,6 +2757,255 @@
     c.arc(-r * 0.15, -r * 0.15, r * 0.62, -Math.PI * 0.88, -Math.PI * 0.38);
     c.strokeStyle = 'rgba(255, 255, 255, 0.85)';
     c.lineWidth = Math.max(2.4, r * 0.09);
+    c.lineCap = 'round';
+    c.stroke();
+
+    c.restore();
+  }
+
+  function renderCrystalSkin(c, r) {
+    // 1. Prismatic Icy Crystal Glass Base Gradient
+    const glassGrad = c.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.05, 0, 0, r);
+    glassGrad.addColorStop(0, '#f0fdfa');    // Bright mint-white diamond core
+    glassGrad.addColorStop(0.25, '#cffafe'); // Translucent ice cyan
+    glassGrad.addColorStop(0.58, '#67e8f9'); // Electric cyan
+    glassGrad.addColorStop(0.85, '#06b6d4'); // Aquatic cyan depth
+    glassGrad.addColorStop(1, '#0e7490');    // Deep teal crystalline rim
+
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.fillStyle = glassGrad;
+    c.fill();
+
+    c.save();
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.clip();
+
+    // 2. Crystalline Internal Refraction Shadow (Bottom-Right Crescent)
+    const refGrad = c.createRadialGradient(r * 0.4, r * 0.4, r * 0.1, r * 0.4, r * 0.4, r * 0.95);
+    refGrad.addColorStop(0, 'rgba(8, 51, 68, 0.7)');
+    refGrad.addColorStop(0.7, 'rgba(14, 116, 144, 0.3)');
+    refGrad.addColorStop(1, 'rgba(6, 182, 212, 0)');
+    c.beginPath();
+    c.arc(r * 0.3, r * 0.3, r * 0.9, 0, Math.PI * 2);
+    c.fillStyle = refGrad;
+    c.fill();
+
+    // 3. Faceted Diamond Geometry (Central Octagonal Table & Radiant Facet Triangles)
+    const sides = 8;
+    const innerR = r * 0.48;
+    const innerPts = [];
+    for (let i = 0; i < sides; i++) {
+      const theta = (i * Math.PI * 2) / sides - Math.PI / 8;
+      innerPts.push({ x: Math.cos(theta) * innerR, y: Math.sin(theta) * innerR });
+    }
+
+    const outerPts = [];
+    for (let i = 0; i < sides; i++) {
+      const theta = (i * Math.PI * 2) / sides - Math.PI / 8;
+      outerPts.push({ x: Math.cos(theta) * (r * 0.98), y: Math.sin(theta) * (r * 0.98) });
+    }
+
+    // Triangular bevel facets between inner polygon and outer rim
+    const facetTints = [
+      'rgba(244, 114, 182, 0.14)', // Soft pink
+      'rgba(165, 243, 252, 0.28)', // Ice cyan
+      'rgba(192, 132, 252, 0.16)', // Violet
+      'rgba(255, 255, 255, 0.22)', // Pure light
+      'rgba(56, 189, 248, 0.18)',  // Sky blue
+      'rgba(253, 224, 71, 0.12)',  // Prism gold
+      'rgba(165, 243, 252, 0.25)', // Ice cyan
+      'rgba(255, 255, 255, 0.15)'
+    ];
+
+    for (let i = 0; i < sides; i++) {
+      const nextI = (i + 1) % sides;
+      c.beginPath();
+      c.moveTo(innerPts[i].x, innerPts[i].y);
+      c.lineTo(innerPts[nextI].x, innerPts[nextI].y);
+      c.lineTo(outerPts[nextI].x, outerPts[nextI].y);
+      c.lineTo(outerPts[i].x, outerPts[i].y);
+      c.closePath();
+
+      c.fillStyle = facetTints[i % facetTints.length];
+      c.fill();
+      c.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      c.lineWidth = 1.2;
+      c.stroke();
+    }
+
+    // Central Table Facet (Inner Octagon)
+    c.beginPath();
+    c.moveTo(innerPts[0].x, innerPts[0].y);
+    for (let i = 1; i < sides; i++) {
+      c.lineTo(innerPts[i].x, innerPts[i].y);
+    }
+    c.closePath();
+    c.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    c.fill();
+    c.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    c.lineWidth = 1.5;
+    c.stroke();
+
+    // Dark comic ink accents along key facet bevels for pop-art definition
+    c.strokeStyle = 'rgba(10, 15, 29, 0.42)';
+    c.lineWidth = 1.1;
+    for (let i = 0; i < sides; i += 2) {
+      c.beginPath();
+      c.moveTo(innerPts[i].x, innerPts[i].y);
+      c.lineTo(outerPts[i].x, outerPts[i].y);
+      c.stroke();
+    }
+
+    // 4. Brilliant 4-Point Specular Star Glint (Diamond Sparkle)
+    const sparkleX = -r * 0.36;
+    const sparkleY = -r * 0.36;
+    const sparkleSize = Math.max(5.5, r * 0.32);
+
+    c.save();
+    c.translate(sparkleX, sparkleY);
+
+    const starHalo = c.createRadialGradient(0, 0, 1, 0, 0, sparkleSize * 1.4);
+    starHalo.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    starHalo.addColorStop(0.35, 'rgba(165, 243, 252, 0.5)');
+    starHalo.addColorStop(1, 'rgba(165, 243, 252, 0)');
+    c.beginPath();
+    c.arc(0, 0, sparkleSize * 1.4, 0, Math.PI * 2);
+    c.fillStyle = starHalo;
+    c.fill();
+
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.moveTo(0, -sparkleSize);
+    c.quadraticCurveTo(0, 0, sparkleSize, 0);
+    c.quadraticCurveTo(0, 0, 0, sparkleSize);
+    c.quadraticCurveTo(0, 0, -sparkleSize, 0);
+    c.quadraticCurveTo(0, 0, 0, -sparkleSize);
+    c.fill();
+
+    c.beginPath();
+    c.arc(r * 0.28, -r * 0.22, Math.max(1.5, r * 0.08), 0, Math.PI * 2);
+    c.fillStyle = '#ffffff';
+    c.fill();
+
+    c.restore();
+    c.restore();
+  }
+
+  function renderSniperSkin(c, r) {
+    // 1. Matte Stealth Carbon Black Base Gradient
+    const carbonGrad = c.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.05, 0, 0, r);
+    carbonGrad.addColorStop(0, '#334155');    // Slate stealth highlight
+    carbonGrad.addColorStop(0.35, '#1e293b'); // Dark ballistic slate
+    carbonGrad.addColorStop(0.75, '#0f172a'); // Midnight carbon
+    carbonGrad.addColorStop(1, '#020617');    // Pitch black rim
+
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.fillStyle = carbonGrad;
+    c.fill();
+
+    c.save();
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.clip();
+
+    // 2. Ballistic Carbon Texture / Range Rings
+    c.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    c.lineWidth = 1.0;
+    c.beginPath();
+    c.arc(0, 0, r * 0.82, 0, Math.PI * 2);
+    c.arc(0, 0, r * 0.44, 0, Math.PI * 2);
+    c.stroke();
+
+    // 3. Neon Red Tactical Targeting Reticle
+    const reticleCol = '#ef4444';
+    const laserCoreCol = '#fecdd3';
+
+    // Outer Target Scope Ring
+    c.beginPath();
+    c.arc(0, 0, r * 0.64, 0, Math.PI * 2);
+    c.strokeStyle = 'rgba(239, 68, 68, 0.25)';
+    c.lineWidth = 3.5;
+    c.stroke();
+    c.strokeStyle = reticleCol;
+    c.lineWidth = 1.6;
+    c.stroke();
+
+    // Inner Target Aperture
+    c.beginPath();
+    c.arc(0, 0, r * 0.24, 0, Math.PI * 2);
+    c.strokeStyle = reticleCol;
+    c.lineWidth = 1.6;
+    c.stroke();
+
+    // Crosshairs with Center Aperture Break (horizontal & vertical)
+    const gap = r * 0.24;
+    const len = r * 0.88;
+
+    function drawLaserLine(x1, y1, x2, y2) {
+      c.beginPath();
+      c.moveTo(x1, y1);
+      c.lineTo(x2, y2);
+      c.strokeStyle = 'rgba(239, 68, 68, 0.35)';
+      c.lineWidth = 3.0;
+      c.stroke();
+
+      c.beginPath();
+      c.moveTo(x1, y1);
+      c.lineTo(x2, y2);
+      c.strokeStyle = reticleCol;
+      c.lineWidth = 1.5;
+      c.stroke();
+    }
+
+    drawLaserLine(0, -len, 0, -gap);
+    drawLaserLine(0, gap, 0, len);
+    drawLaserLine(-len, 0, -gap, 0);
+    drawLaserLine(gap, 0, len, 0);
+
+    // Mil-Dot / Rangefinder Ticks along crosshair axes
+    const tickOffsets = [r * 0.42, r * 0.64, r * 0.78];
+    const tickHalf = Math.max(1.8, r * 0.08);
+    c.strokeStyle = laserCoreCol;
+    c.lineWidth = 1.3;
+    c.beginPath();
+    tickOffsets.forEach(d => {
+      c.moveTo(d, -tickHalf); c.lineTo(d, tickHalf);
+      c.moveTo(-d, -tickHalf); c.lineTo(-d, tickHalf);
+      c.moveTo(-tickHalf, d); c.lineTo(tickHalf, d);
+      c.moveTo(-tickHalf, -d); c.lineTo(tickHalf, -d);
+    });
+    c.stroke();
+
+    // 4 Corner Quadrant Chevron Marks (tactical brackets)
+    const bRad = r * 0.48;
+    const bAngle = Math.PI / 4;
+    for (let i = 0; i < 4; i++) {
+      const angle = bAngle + (i * Math.PI) / 2;
+      const bx = Math.cos(angle) * bRad;
+      const by = Math.sin(angle) * bRad;
+      c.beginPath();
+      c.arc(bx, by, Math.max(1.6, r * 0.05), 0, Math.PI * 2);
+      c.fillStyle = reticleCol;
+      c.fill();
+    }
+
+    // Center Laser Bullseye Dot
+    c.beginPath();
+    c.arc(0, 0, Math.max(2.2, r * 0.09), 0, Math.PI * 2);
+    c.fillStyle = '#ffffff';
+    c.fill();
+    c.strokeStyle = reticleCol;
+    c.lineWidth = 1.2;
+    c.stroke();
+
+    // 4. Optic Glass Lens Reflection Streak
+    c.beginPath();
+    c.arc(-r * 0.18, -r * 0.18, r * 0.68, -Math.PI * 0.85, -Math.PI * 0.42);
+    c.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    c.lineWidth = Math.max(2.0, r * 0.07);
     c.lineCap = 'round';
     c.stroke();
 
