@@ -46,6 +46,30 @@
       hidden: true
     },
     {
+      id: 'downtown_sniper',
+      title: 'From Downtown',
+      desc: 'Drain a long bomb basket from 28+ feet away',
+      reward: 'Tactical Sniper Skin Unlocked',
+      skinReward: 'sniper',
+      hidden: false
+    },
+    {
+      id: 'bank_shot',
+      title: 'Off the Glass',
+      desc: 'Score a basket after bouncing off the backboard',
+      reward: 'Prism Crystal Skin Unlocked',
+      skinReward: 'crystal',
+      hidden: false
+    },
+    {
+      id: 'floor_bounce',
+      title: 'Hardwood Bounce',
+      desc: 'Score a basket after bouncing off the court floor',
+      reward: 'Neon Synthwave Skin Unlocked',
+      skinReward: 'synthwave',
+      hidden: true
+    },
+    {
       id: 'midas_streak_20',
       title: 'The Midas Touch',
       desc: 'Reach a legendary 20-basket streak',
@@ -76,22 +100,6 @@
       reward: 'Hot-Rod Fire Skin Unlocked',
       skinReward: 'fire_hotrod',
       hidden: false
-    },
-    {
-      id: 'bank_shot',
-      title: 'Off the Glass',
-      desc: 'Score a basket after bouncing off the backboard',
-      reward: 'Prism Crystal Skin Unlocked',
-      skinReward: 'crystal',
-      hidden: false
-    },
-    {
-      id: 'downtown_sniper',
-      title: 'From Downtown',
-      desc: 'Drain a long bomb basket from 28+ feet away',
-      reward: 'Tactical Sniper Skin Unlocked',
-      skinReward: 'sniper',
-      hidden: false
     }
   ];
 
@@ -103,6 +111,7 @@
     { id: 'donut', name: 'Pink Donut', desc: 'Strawberry frosting with rainbow sprinkles' },
     { id: 'sniper', name: 'Tactical Sniper', desc: 'Matte carbon stealth & neon laser crosshair' },
     { id: 'crystal', name: 'Prism Crystal', desc: 'Faceted diamond glass & prismatic refractions' },
+    { id: 'synthwave', name: 'Neon Synthwave', desc: 'Cyberpunk midnight violet & laser neon grid seams' },
     { id: 'gold', name: '24K Midas', desc: 'Championship polished gold & white seams' },
     { id: 'fire_blue', name: 'Blue Plasma', desc: 'Ghost blue electric fire & cyan trail' },
     { id: 'fire', name: 'Magma Blaze', desc: 'Molten glowing lava seams & ember trail' },
@@ -781,7 +790,7 @@
   const V_MAX = 1450; // High ceiling for deep arching shots
   const RESTITUTION_RIM = 0.52; // Authentic steel rim restitution: natural rattles and authentic misses
   const RESTITUTION_BOARD = 0.60; // Glass backboard rebound: requires proper touch/arc, not guaranteed
-  const RESTITUTION_FLOOR = 0.58;
+  const RESTITUTION_FLOOR = 0.64; // Tuned floor restitution: enough pop to reach net on intentional floor bounce, without bouncing wild
 
   // Object pooling for particles
   const MAX_PARTICLES = 160;
@@ -1471,8 +1480,8 @@
             } else {
               b.vy = 0;
             }
-            b.angularVelocity *= 0.75;
-            b.vx *= 0.85;
+            b.angularVelocity *= 0.76;
+            b.vx *= 0.84;
 
             const now = performance.now();
             if (now - (b.lastBounceTime || 0) > 90 && impact > 0.08) {
@@ -1480,8 +1489,19 @@
               b.lastBounceTime = now;
             }
 
-            // If ball touched the floor without scoring, shot is officially missed
-            if (!b.shotData.scored && !b.shotData.resolved) {
+            // Track floor bounce
+            b.shotData.hitFloor = true;
+            b.floorBounces = (b.floorBounces || 0) + 1;
+
+            // Instantly break active streak on floor contact (playground rules: floor bounce doesn't continue streak)
+            if (State.streak > 0 && !b.shotData.scored && !b.shotData.resolved) {
+              State.streak = 0;
+              State.sessionCleanShots = 0;
+              updateHUD();
+            }
+
+            // A floor-bounce trickshot is 1 bounce -> basket. On a 2nd floor bounce, resolve shot immediately!
+            if (b.floorBounces >= 2 && !b.shotData.scored && !b.shotData.resolved) {
               handleShotMiss(b);
             }
           }
@@ -1550,7 +1570,15 @@
 
       // Unresolved shot resting or timeout check
       if (!b.shotData.resolved) {
-        if ((ballSpeed < 25 && b.y >= floorY - b.radius - 2) || b.restTime > 0.85 || b.flightTime > 5.5) {
+        // Floor-bounced balls get a calibrated ~1.6s window (~2x normal) to reach the hoop, then promptly resolve
+        if (b.shotData.hitFloor) {
+          b.timeSinceFloor = (b.timeSinceFloor || 0) + dt;
+          if (b.timeSinceFloor > 1.6 || (ballSpeed < 28 && b.y >= floorY - b.radius - 3)) {
+            if (!b.shotData.scored) {
+              handleShotMiss(b);
+            }
+          }
+        } else if ((ballSpeed < 25 && b.y >= floorY - b.radius - 2) || b.restTime > 0.85 || b.flightTime > 5.0) {
           if (!b.shotData.scored) {
             handleShotMiss(b);
           }
@@ -1561,13 +1589,12 @@
         }
       }
 
-      // Once resolved, handle smooth fade-out and removal
+      // Smooth fade-out and removal once resolved (no lingering until stopped)
       if (b.shotData.resolved) {
         b.lifeAfterResolve = (b.lifeAfterResolve || 0) + dt;
-        const isResting = ballSpeed < 35 && b.y >= floorY - b.radius - 5;
-        const isCrowded = balls.length > 7;
-        if (b.lifeAfterResolve > (isCrowded ? 0.6 : 1.2) || isResting || b.y > height + 60 || b.x < -200 || b.x > width + 250) {
-          b.opacity -= dt * (isCrowded ? 2.5 : 1.6);
+        const isCrowded = balls.length > 5;
+        if (b.lifeAfterResolve > (isCrowded ? 0.35 : 0.75) || b.y > height + 60 || b.x < -200 || b.x > width + 250) {
+          b.opacity -= dt * (isCrowded ? 3.0 : 1.8);
           if (b.opacity <= 0) {
             balls.splice(i, 1);
           }
@@ -1579,6 +1606,12 @@
   // Realistic elastic circle-circle collision between two balls
   function checkBallBallCollision(b1, b2, subDt) {
     if (b1.opacity < 0.2 || b2.opacity < 0.2 || b1.scale < 0.5 || b2.scale < 0.5) return;
+
+    // Do not let balls that have hit the floor or are resolved deflect fresh in-flight shots
+    const b1Dead = b1.shotData.resolved || b1.shotData.hitFloor;
+    const b2Dead = b2.shotData.resolved || b2.shotData.hitFloor;
+    if (b1Dead && !b2Dead) return;
+    if (!b1Dead && b2Dead) return;
 
     const dx = b2.x - b1.x;
     const dy = b2.y - b1.y;
@@ -2084,6 +2117,17 @@
       }, 220);
     }
 
+    // 4b. Floor Bounce Callout
+    if (b.shotData.hitFloor) {
+      setTimeout(() => {
+        addFloatingText('FLOOR BOUNCE! 🏓', midRimX, hoop.rimY - 45, '#38bdf8', 26, {
+          vx: (Math.random() - 0.5) * 8,
+          vy: -22,
+          rotation: (Math.random() - 0.5) * 0.08
+        });
+      }, 120);
+    }
+
     // 5. New High Score celebration! Center court banner
     if (isNewBestRun) {
       setTimeout(() => {
@@ -2165,6 +2209,11 @@
       unlockAchievement('downtown_sniper');
     }
 
+    // 9. Floor Bounce Trickshot
+    if (b.shotData.hitFloor) {
+      unlockAchievement('floor_bounce');
+    }
+
     b.shotData.resolved = true;
     b.lifeAfterResolve = 0;
     scheduleStorageFlush();
@@ -2240,6 +2289,9 @@
         break;
       case 'donut':
         renderDonutSkin(targetCtx, r);
+        break;
+      case 'synthwave':
+        renderSynthwaveSkin(targetCtx, r);
         break;
       case 'sniper':
         renderSniperSkin(targetCtx, r);
@@ -2757,6 +2809,106 @@
     c.arc(-r * 0.15, -r * 0.15, r * 0.62, -Math.PI * 0.88, -Math.PI * 0.38);
     c.strokeStyle = 'rgba(255, 255, 255, 0.85)';
     c.lineWidth = Math.max(2.4, r * 0.09);
+    c.lineCap = 'round';
+    c.stroke();
+
+    c.restore();
+  }
+
+  function renderSynthwaveSkin(c, r) {
+    // 1. Deep Midnight Cyberpunk Violet Base
+    const synthGrad = c.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.05, 0, 0, r);
+    synthGrad.addColorStop(0, '#581c87');    // Electric violet core
+    synthGrad.addColorStop(0.35, '#3b0764'); // Deep purple abyss
+    synthGrad.addColorStop(0.75, '#1e0842'); // Midnight synthwave
+    synthGrad.addColorStop(1, '#0b0217');    // Pitch black rim
+
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.fillStyle = synthGrad;
+    c.fill();
+
+    c.save();
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.clip();
+
+    // 2. Retro 80s Wireframe Horizon Perspective Grid (Lower Hemisphere)
+    c.strokeStyle = 'rgba(6, 182, 212, 0.45)'; // Neon cyan grid
+    c.lineWidth = 1.0;
+
+    // Horizon line
+    c.beginPath();
+    c.moveTo(-r, r * 0.1);
+    c.lineTo(r, r * 0.1);
+    c.stroke();
+
+    // Horizontal perspective lines getting closer to horizon
+    const gridYs = [r * 0.28, r * 0.48, r * 0.70, r * 0.88];
+    gridYs.forEach(gy => {
+      c.beginPath();
+      c.moveTo(-r, gy);
+      c.lineTo(r, gy);
+      c.stroke();
+    });
+
+    // Converging perspective lines towards horizon center
+    const vpX = 0;
+    const vpY = r * 0.1;
+    const bottomOffsets = [-r * 0.85, -r * 0.55, -r * 0.25, 0, r * 0.25, r * 0.55, r * 0.85];
+    bottomOffsets.forEach(bx => {
+      c.beginPath();
+      c.moveTo(vpX, vpY);
+      c.lineTo(bx, r);
+      c.stroke();
+    });
+
+    // 3. Neon Laser Seams (Dual-glow: Hot Pink & Laser Cyan)
+    function drawSynthSeam(drawPath) {
+      c.save();
+      c.strokeStyle = 'rgba(244, 63, 94, 0.55)';
+      c.lineWidth = 3.8;
+      c.beginPath();
+      drawPath();
+      c.stroke();
+
+      c.strokeStyle = '#67e8f9';
+      c.lineWidth = 1.6;
+      c.beginPath();
+      drawPath();
+      c.stroke();
+      c.restore();
+    }
+
+    drawSynthSeam(() => {
+      c.moveTo(-r, 0);
+      c.lineTo(r, 0);
+    });
+    drawSynthSeam(() => {
+      c.moveTo(0, -r);
+      c.lineTo(0, r);
+    });
+    drawSynthSeam(() => {
+      c.arc(-r * 0.95, 0, r * 0.75, -Math.PI * 0.35, Math.PI * 0.35);
+    });
+    drawSynthSeam(() => {
+      c.arc(r * 0.95, 0, r * 0.75, Math.PI * 0.65, Math.PI * 1.35);
+    });
+
+    // 4. Hot Neon Pink Rim Glow (Lower-Right)
+    const glowGrad = c.createRadialGradient(r * 0.5, r * 0.5, r * 0.1, r * 0.5, r * 0.5, r * 0.95);
+    glowGrad.addColorStop(0, 'rgba(244, 63, 94, 0.45)');
+    glowGrad.addColorStop(1, 'rgba(244, 63, 94, 0)');
+    c.beginPath();
+    c.arc(r * 0.4, r * 0.4, r * 0.85, 0, Math.PI * 2);
+    c.fillStyle = glowGrad;
+    c.fill();
+
+    // 5. Electric Cyan Specular Arc
+    c.beginPath();
+    c.arc(-r * 0.18, -r * 0.18, r * 0.65, -Math.PI * 0.85, -Math.PI * 0.42);
+    c.strokeStyle = '#cffafe';
+    c.lineWidth = Math.max(2.2, r * 0.08);
     c.lineCap = 'round';
     c.stroke();
 
@@ -3968,11 +4120,23 @@
   function renderAchievementsList() {
     dom.achievementsList.textContent = '';
 
+    // Steam-Style Partition: Visible/unlocked achievements stay in catalog order;
+    // locked hidden achievements are pushed to the bottom.
+    const standardList = [];
+    const hiddenLockedList = [];
+
     ACHIEVEMENTS_CATALOG.forEach(ach => {
       const isUnlocked = !!State.achievements[ach.id];
+      if (ach.hidden && !isUnlocked) {
+        hiddenLockedList.push({ ach, isUnlocked: false });
+      } else {
+        standardList.push({ ach, isUnlocked });
+      }
+    });
 
+    function createAchievementItem(ach, isUnlocked) {
       const item = document.createElement('div');
-      item.className = `achievement-item ${isUnlocked ? 'unlocked' : ''}`;
+      item.className = `achievement-item ${isUnlocked ? 'unlocked' : (ach.hidden ? 'hidden-locked' : '')}`;
 
       const iconBox = document.createElement('div');
       iconBox.className = 'ach-icon-box';
@@ -3986,15 +4150,30 @@
       svg.setAttribute('stroke-linecap', 'round');
       svg.setAttribute('stroke-linejoin', 'round');
 
-      const p1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      p1.setAttribute('d', 'M6 9H4.5a2.5 2.5 0 0 1 0-5H6');
-      const p2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      p2.setAttribute('d', 'M18 9h1.5a2.5 2.5 0 0 0 0-5H18');
-      const p3 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      p3.setAttribute('d', 'M4 22h16');
-      const p4 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      p4.setAttribute('d', 'M18 2H6v7a6 6 0 0 0 12 0V2Z');
-      svg.append(p1, p2, p3, p4);
+      if (ach.hidden && !isUnlocked) {
+        // Subtle lock padlock icon for secret locked achievements
+        const p1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        p1.setAttribute('x', '3');
+        p1.setAttribute('y', '11');
+        p1.setAttribute('width', '18');
+        p1.setAttribute('height', '11');
+        p1.setAttribute('rx', '2');
+        p1.setAttribute('ry', '2');
+        const p2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p2.setAttribute('d', 'M7 11V7a5 5 0 0 1 10 0v4');
+        svg.append(p1, p2);
+      } else {
+        // Trophy icon
+        const p1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p1.setAttribute('d', 'M6 9H4.5a2.5 2.5 0 0 1 0-5H6');
+        const p2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p2.setAttribute('d', 'M18 9h1.5a2.5 2.5 0 0 0 0-5H18');
+        const p3 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p3.setAttribute('d', 'M4 22h16');
+        const p4 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p4.setAttribute('d', 'M18 2H6v7a6 6 0 0 0 12 0V2Z');
+        svg.append(p1, p2, p3, p4);
+      }
       iconBox.appendChild(svg);
 
       const infoBox = document.createElement('div');
@@ -4026,8 +4205,39 @@
 
       infoBox.append(titleEl, descEl, rewardEl);
       item.append(iconBox, infoBox, statusEl);
-      dom.achievementsList.appendChild(item);
+      return item;
+    }
+
+    // 1. Render visible or already-unlocked achievements in their natural catalog position
+    standardList.forEach(({ ach, isUnlocked }) => {
+      dom.achievementsList.appendChild(createAchievementItem(ach, isUnlocked));
     });
+
+    // 2. Render remaining locked hidden achievements at the bottom (Steam style)
+    if (hiddenLockedList.length > 0) {
+      const groupEl = document.createElement('div');
+      groupEl.className = 'ach-hidden-group';
+
+      const headerEl = document.createElement('div');
+      headerEl.className = 'ach-hidden-header';
+
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'ach-hidden-title';
+      titleSpan.textContent = `${hiddenLockedList.length} Hidden Achievement${hiddenLockedList.length > 1 ? 's' : ''} Remaining 🔒`;
+
+      const subSpan = document.createElement('small');
+      subSpan.className = 'ach-hidden-sub';
+      subSpan.textContent = 'Revealed once unlocked';
+
+      headerEl.append(titleSpan, subSpan);
+      groupEl.appendChild(headerEl);
+
+      hiddenLockedList.forEach(({ ach, isUnlocked }) => {
+        groupEl.appendChild(createAchievementItem(ach, isUnlocked));
+      });
+
+      dom.achievementsList.appendChild(groupEl);
+    }
   }
 
   function toggleFullscreen() {
