@@ -98,21 +98,21 @@
     {
       id: 'sharp',
       name: 'SHARP SHOOTER',
-      minStreak: 7,
+      minStreak: 6,
       top: [88, 28, 135],
       bottom: [30, 27, 75]
     },
     {
       id: 'fire',
       name: 'ON FIRE',
-      minStreak: 12,
+      minStreak: 10,
       top: [124, 45, 18],
       bottom: [69, 10, 10]
     },
     {
       id: 'legend',
       name: 'LEGENDARY',
-      minStreak: 18,
+      minStreak: 15,
       top: [120, 53, 15],
       bottom: [28, 25, 23]
     }
@@ -144,18 +144,24 @@
   // ==========================================
   const State = {
     // Persistent (buffered in-memory, flushed on events)
+    highScore: 0,
     bestStreak: 0,
     lifetimeBaskets: 0,
     lifetimeCleanShots: 0,
+    lifetimeBankShots: 0,
+    longestShot: 0,
+    maxHeight: 0,
     equippedSkin: 'classic',
     unlockedSkins: { classic: true },
     achievements: {},
     isMuted: false,
     hoopSide: 'left', // 'left' (Right-to-Left, default for right-handed mobile players) | 'right' (Left-to-Right)
 
-    // Session / Runtime
+    // Active Run State (resets on miss)
+    score: 0,
     streak: 0,
     sessionCleanShots: 0,
+    announcedHighScore: false,
     isDirtyStorage: false,
     isPseudoFullscreen: false,
 
@@ -178,7 +184,9 @@
       enteredFromBelow: false,
       distanceFeet: 22,
       zoneName: '3-POINTER',
-      zoneColor: '#10b981'
+      zoneColor: '#10b981',
+      minY: 999999,
+      apexFeet: 0
     }
   };
 
@@ -197,9 +205,11 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
-          const best = parsed.bestStreak ?? parsed.highScore;
-          if (typeof best === 'number' && Number.isFinite(best)) {
-            State.bestStreak = Math.max(0, Math.floor(best));
+          if (typeof parsed.highScore === 'number' && Number.isFinite(parsed.highScore)) {
+            State.highScore = Math.max(0, Math.floor(parsed.highScore));
+          }
+          if (typeof parsed.bestStreak === 'number' && Number.isFinite(parsed.bestStreak)) {
+            State.bestStreak = Math.max(0, Math.floor(parsed.bestStreak));
           }
           if (typeof parsed.lifetimeBaskets === 'number' && Number.isFinite(parsed.lifetimeBaskets)) {
             State.lifetimeBaskets = Math.max(0, Math.floor(parsed.lifetimeBaskets));
@@ -207,6 +217,15 @@
           const clean = parsed.lifetimeCleanShots ?? parsed.lifetimeSwishes;
           if (typeof clean === 'number' && Number.isFinite(clean)) {
             State.lifetimeCleanShots = Math.max(0, Math.floor(clean));
+          }
+          if (typeof parsed.lifetimeBankShots === 'number' && Number.isFinite(parsed.lifetimeBankShots)) {
+            State.lifetimeBankShots = Math.max(0, Math.floor(parsed.lifetimeBankShots));
+          }
+          if (typeof parsed.longestShot === 'number' && Number.isFinite(parsed.longestShot)) {
+            State.longestShot = Math.max(0, Math.floor(parsed.longestShot));
+          }
+          if (typeof parsed.maxHeight === 'number' && Number.isFinite(parsed.maxHeight)) {
+            State.maxHeight = parsed.maxHeight >= 25 ? Math.floor(parsed.maxHeight) : 0;
           }
           if (typeof parsed.equippedSkin === 'string' && BALL_SKINS.some(s => s.id === parsed.equippedSkin)) {
             State.equippedSkin = parsed.equippedSkin;
@@ -256,9 +275,13 @@
     if (!State.isDirtyStorage) return;
     try {
       const payload = {
+        highScore: State.highScore,
         bestStreak: State.bestStreak,
         lifetimeBaskets: State.lifetimeBaskets,
         lifetimeCleanShots: State.lifetimeCleanShots,
+        lifetimeBankShots: State.lifetimeBankShots,
+        longestShot: State.longestShot,
+        maxHeight: State.maxHeight || 0,
         equippedSkin: State.equippedSkin,
         unlockedSkins: State.unlockedSkins,
         achievements: State.achievements,
@@ -432,11 +455,22 @@
   const dom = {
     wrapper: document.getElementById('gameWrapper'),
     canvas: document.getElementById('gameCanvas'),
+    statsBar: document.getElementById('hudStatsBar'),
     streak: document.getElementById('hudStreak'),
-    streakPill: document.getElementById('hudStreakPill'),
-    tierBadge: document.getElementById('hudTierBadge'),
+    streakWrap: document.getElementById('hudStreakWrap'),
+    streakFlame: document.getElementById('streakFlame'),
+    hudMultiplier: document.getElementById('hudMultiplier'),
+    score: document.getElementById('hudScore'),
+    highScore: document.getElementById('hudHighScore'),
     bestStreak: document.getElementById('hudBestStreak'),
     totalBaskets: document.getElementById('hudTotalBaskets'),
+    tierBadge: document.getElementById('hudTierBadge'),
+    statHighScore: document.getElementById('statHighScore'),
+    statBestStreak: document.getElementById('statBestStreak'),
+    statTotalBaskets: document.getElementById('statTotalBaskets'),
+    statCleanSwishes: document.getElementById('statCleanSwishes'),
+    statMaxHeight: document.getElementById('statMaxHeight'),
+    statLongestShot: document.getElementById('statLongestShot'),
     aimHint: document.getElementById('aimHint'),
     btnSettings: document.getElementById('btnSettings'),
     settingsModal: document.getElementById('settingsModal'),
@@ -465,6 +499,9 @@
     hudHeader: document.querySelector('.hud-header'),
     zenPill: document.getElementById('zenPill'),
     zenStreak: document.getElementById('zenStreak'),
+    zenStreakWrap: document.getElementById('zenStreakWrap'),
+    zenMultiplier: document.getElementById('zenMultiplier'),
+    zenScore: document.getElementById('zenScore'),
     zenBtnMenu: document.getElementById('zenBtnMenu'),
     zenBtnExit: document.getElementById('zenBtnExit')
   };
@@ -474,30 +511,83 @@
   function updateHUD() {
     const tier = getCurrentTier();
 
-    dom.streak.textContent = State.streak;
-    dom.bestStreak.textContent = State.bestStreak;
-    dom.totalBaskets.textContent = State.lifetimeBaskets;
+    // 1. Live Streak & Flame Animation in normal HUD
+    if (dom.streak) {
+      dom.streak.textContent = State.streak;
+    }
+    if (dom.streakWrap) {
+      dom.streakWrap.classList.toggle('streak-active', State.streak >= 3);
+      dom.streakWrap.classList.toggle('on-fire', State.streak >= 10);
+    }
 
+    // 2. Score & High Score in normal HUD
+    if (dom.score) {
+      dom.score.textContent = State.score.toLocaleString();
+    }
+    if (dom.highScore) {
+      dom.highScore.textContent = State.highScore.toLocaleString();
+    }
+
+    // 3. Streak Multiplier Influence (×1.2, ×1.5, ×2, ×3, ×4+)
+    let multiplier = 1.0;
+    if (State.streak >= 15) multiplier = 4.0 + (State.streak - 15) * 0.2;
+    else if (State.streak >= 10) multiplier = 3.0;
+    else if (State.streak >= 6) multiplier = 2.0;
+    else if (State.streak >= 3) multiplier = 1.5;
+    else if (State.streak >= 2) multiplier = 1.2;
+
+    const multText = `×${multiplier.toFixed(multiplier % 1 === 0 ? 0 : 1)}`;
+    const tierClass = multiplier >= 4.0 ? 'tier-4' : (multiplier >= 3.0 ? 'tier-3' : (multiplier >= 2.0 ? 'tier-2' : ''));
+
+    // Apply multiplier badge to normal HUD streak item
+    if (dom.hudMultiplier) {
+      if (multiplier > 1.0) {
+        dom.hudMultiplier.textContent = multText;
+        dom.hudMultiplier.className = `combo-badge ${tierClass}`.trim();
+      } else {
+        dom.hudMultiplier.className = 'combo-badge hidden';
+      }
+    }
+
+    // Apply reactive milestone border to the normal HUD stats bar capsule
+    if (dom.statsBar) {
+      dom.statsBar.className = `stats-bar tier-${tier.id}`;
+    }
+
+    // 4. Zen Mode Floating Pill: Streak, Multiplier, and Live Score
     if (dom.zenStreak) {
       dom.zenStreak.textContent = State.streak;
     }
-    if (dom.zenPill) {
-      dom.zenPill.classList.toggle('hoop-left', State.hoopSide === 'left');
-      dom.zenPill.classList.toggle('hoop-right', State.hoopSide === 'right');
+    if (dom.zenStreakWrap) {
+      dom.zenStreakWrap.classList.toggle('has-streak', State.streak >= 3);
+      dom.zenStreakWrap.classList.toggle('on-fire', State.streak >= 10);
+    }
+    if (dom.zenMultiplier) {
+      if (multiplier > 1.0) {
+        dom.zenMultiplier.textContent = multText;
+        dom.zenMultiplier.className = `zen-combo ${tierClass}`.trim();
+      } else {
+        dom.zenMultiplier.className = 'zen-combo hidden';
+      }
+    }
+    if (dom.zenScore) {
+      dom.zenScore.textContent = State.score.toLocaleString();
     }
 
-    dom.tierBadge.textContent = tier.name;
-    dom.tierBadge.className = `tier-badge tier-${tier.id}`;
+    // Career Statistics in Options Modal
+    if (dom.statHighScore) dom.statHighScore.textContent = State.highScore.toLocaleString();
+    if (dom.statBestStreak) dom.statBestStreak.textContent = State.bestStreak.toLocaleString();
+    if (dom.statTotalBaskets) dom.statTotalBaskets.textContent = State.lifetimeBaskets.toLocaleString();
+    if (dom.statCleanSwishes) dom.statCleanSwishes.textContent = (State.lifetimeCleanShots || 0).toLocaleString();
+    if (dom.statMaxHeight) dom.statMaxHeight.textContent = (State.maxHeight && State.maxHeight > 0) ? `${State.maxHeight} FT` : '--';
+    if (dom.statLongestShot) dom.statLongestShot.textContent = `${State.longestShot || 0} FT`;
 
-    if (State.streak >= 3) {
-      dom.streakPill.classList.add('streak-active');
-      if (State.streak >= 10) {
-        dom.streakPill.classList.add('on-fire');
-      } else {
-        dom.streakPill.classList.remove('on-fire');
-      }
-    } else {
-      dom.streakPill.classList.remove('streak-active', 'on-fire');
+    // Legacy fallback elements update
+    if (dom.bestStreak) dom.bestStreak.textContent = State.bestStreak;
+    if (dom.totalBaskets) dom.totalBaskets.textContent = State.lifetimeBaskets;
+    if (dom.tierBadge) {
+      dom.tierBadge.textContent = tier.name;
+      dom.tierBadge.className = `tier-badge tier-${tier.id}`;
     }
 
     const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || State.isPseudoFullscreen);
@@ -513,9 +603,7 @@
       dom.toggleFullscreen.checked = isFs;
     }
     if (dom.zenPill) {
-      dom.zenPill.classList.toggle('hidden', !isFs);
-      dom.zenPill.classList.toggle('hoop-left', State.hoopSide === 'left');
-      dom.zenPill.classList.toggle('hoop-right', State.hoopSide === 'right');
+      dom.zenPill.className = `zen-pill tier-${tier.id}${!isFs ? ' hidden' : ''}${State.hoopSide === 'left' ? ' hoop-left' : ' hoop-right'}`;
     }
 
     if (dom.toggleSound) {
@@ -737,6 +825,22 @@
     }
   }
 
+  function getBallAltitudeFeet(y) {
+    const floorY = height - 12;
+    if (y >= 0) {
+      // On-screen: authentic scale from 0 FT (floor) to ~10 FT (rim) to ~38 FT (ceiling)
+      const ratio = Math.max(0, (floorY - y) / Math.max(10, floorY));
+      return Math.max(0, Math.round(38 * ratio));
+    } else {
+      // Off-screen sky: normalized by screen height so every device scales fairly!
+      // Cleared ceiling starts at ~40-45 FT (Sky-Hook)
+      // High arc reaches ~80-119 FT (Moonshot)
+      // Deep orbit reaches 120+ FT (Stratosphere)
+      const skyRatio = -y / Math.max(320, height);
+      return Math.round(38 + skyRatio * 58);
+    }
+  }
+
   function initNetMesh() {
     hoop.netPoints = [];
     const segments = 6;
@@ -809,6 +913,8 @@
     State.currentShot.scored = false;
     State.currentShot.isClean = false;
     State.currentShot.enteredFromBelow = false;
+    State.currentShot.minY = ball.y;
+    State.currentShot.apexFeet = 0;
 
     // Shot Distance & Zone Classification
     const hoopCenterX = (hoop.rimFrontX + hoop.rimBackX) / 2;
@@ -931,8 +1037,12 @@
     const dy = pt.y - State.aimStart.y;
 
     // Launch velocity: v = -k * (Δx, Δy) with calibrated ergonomic travel
+    // Responsive vertical pull scaling:
+    // Ensures mobile devices with shorter vertical screen space have the ergonomic pull
+    // needed to achieve high sky-hooks and 120ft+ Stratosphere shots fairly.
+    const screenScaleY = Math.max(1.0, 850 / Math.max(380, height));
     let vx = -K_LAUNCH_X * dx;
-    let vy = -K_LAUNCH_Y * dy;
+    let vy = -K_LAUNCH_Y * dy * (dy > 0 ? screenScaleY : 1.0);
 
     const speed = Math.hypot(vx, vy);
     // Uncapped strength: you can pull as hard as you want and launch it into space!
@@ -970,6 +1080,7 @@
       // Natural backspin on basketball launch (rotates opposite to flight direction)
       ball.angularVelocity = -Math.sign(ball.vx || 1) * 4.5 + (ball.vx * 0.003);
       State.phase = 'IN_FLIGHT';
+      State.currentShot.minY = ball.y;
     } else {
       // Cancelled aim
       ball.x = ball.originX;
@@ -1040,6 +1151,9 @@
       ball.vy += GRAVITY * subDt;
       ball.x += ball.vx * subDt;
       ball.y += ball.vy * subDt;
+      if (ball.y < State.currentShot.minY) {
+        State.currentShot.minY = ball.y;
+      }
       ball.angle += ball.angularVelocity * subDt;
       // Gentle midair rotational damping
       ball.angularVelocity *= (1 - 0.12 * subDt);
@@ -1355,6 +1469,8 @@
   function handleScoreSuccess() {
     // Clean shot: pure swish that never touched the rim or backboard
     const isClean = State.currentShot.rimHits === 0 && State.currentShot.backboardHits === 0;
+    const isBank = State.currentShot.backboardHits > 0;
+    const isRattle = State.currentShot.rimHits >= 2;
     State.currentShot.isClean = isClean;
 
     State.streak++;
@@ -1367,6 +1483,111 @@
       State.lifetimeCleanShots++;
       State.sessionCleanShots++;
     }
+    if (isBank) {
+      State.lifetimeBankShots = (State.lifetimeBankShots || 0) + 1;
+    }
+    const distFeet = State.currentShot.distanceFeet || 20;
+    if (distFeet > (State.longestShot || 0)) {
+      State.longestShot = distFeet;
+    }
+
+    // Apex Height calculation: strictly scarce — only shots that actively went outside the top of the screen
+    const isOffscreen = State.currentShot.minY < -ball.radius;
+    let apexFeet = 0;
+    if (isOffscreen) {
+      apexFeet = getBallAltitudeFeet(State.currentShot.minY);
+      State.currentShot.apexFeet = apexFeet;
+      if (apexFeet > (State.maxHeight || 0)) {
+        State.maxHeight = apexFeet;
+      }
+    } else {
+      State.currentShot.apexFeet = 0;
+    }
+
+    // ==========================================
+    // EXCITING DEEP SCORING CALCULATION
+    // ==========================================
+    // 1. Base Score
+    const basePoints = 100;
+
+    // 2. Style Bonus
+    let styleBonus = 0;
+    let styleLabel = '';
+    if (isClean) {
+      styleBonus = 150;
+      styleLabel = 'SWISH';
+    } else if (isBank) {
+      styleBonus = 80;
+      styleLabel = 'BANK SHOT';
+    } else if (isRattle) {
+      styleBonus = 40;
+      styleLabel = 'RATTLE';
+    }
+
+    // 3. Distance Bonus
+    let distBonus = 25;
+    let distLabel = `${distFeet}FT`;
+    if (distFeet >= 38) {
+      distBonus = 250;
+      distLabel = 'DOWNTOWN';
+    } else if (distFeet >= 28) {
+      distBonus = 120;
+      distLabel = 'DEEP 3';
+    } else if (distFeet >= 22) {
+      distBonus = 60;
+    }
+
+    // 4. Moonshot / Stratosphere Bonus (Strictly scarce: exclusively for off-screen shots!)
+    // Balanced: standard off-screen (Sky-Hook, Moonshot), Stratosphere (120ft+), and Deep Space (160ft+).
+    // Hard-capped at 1,000 pts max so single-shot tricks cannot rival dedicated streak building!
+    let heightBonus = 0;
+    let heightLabel = '';
+    if (isOffscreen) {
+      if (apexFeet >= 160) {
+        heightLabel = 'DEEP SPACE! 🌌';
+        const excess = apexFeet - 160;
+        heightBonus = Math.min(1000, Math.round(700 + excess * 5));
+      } else if (apexFeet >= 120) {
+        heightLabel = 'STRATOSPHERE! 🛰️';
+        const excess = apexFeet - 120;
+        heightBonus = Math.min(650, Math.round(400 + excess * 6.5));
+      } else if (apexFeet >= 80) {
+        heightLabel = 'MOONSHOT! 🌙';
+        const excess = apexFeet - 80;
+        heightBonus = Math.round(160 + excess * 5);
+      } else {
+        heightLabel = 'SKY-HOOK! 🚀';
+        const excess = Math.max(0, apexFeet - 38);
+        heightBonus = Math.round(50 + excess * 2.5);
+      }
+    }
+
+    // 5. Streak Combo Multiplier
+    let multiplier = 1.0;
+    if (State.streak >= 15) {
+      multiplier = 4.0 + (State.streak - 15) * 0.2;
+    } else if (State.streak >= 10) {
+      multiplier = 3.0;
+    } else if (State.streak >= 6) {
+      multiplier = 2.0;
+    } else if (State.streak >= 3) {
+      multiplier = 1.5;
+    } else if (State.streak >= 2) {
+      multiplier = 1.2;
+    }
+
+    // Total points for this shot
+    const shotPoints = Math.round((basePoints + styleBonus + distBonus + heightBonus) * multiplier);
+    State.score += shotPoints;
+
+    let isNewBestRun = false;
+    if (State.score > State.highScore) {
+      if (State.highScore > 0 && !State.announcedHighScore) {
+        isNewBestRun = true;
+        State.announcedHighScore = true;
+      }
+      State.highScore = State.score;
+    }
 
     State.isDirtyStorage = true;
     updateHUD();
@@ -1374,7 +1595,10 @@
     // Audio effects: Swish + Chime
     Sound.swish();
     setTimeout(() => {
-      Sound.chime(isClean ? (State.streak >= 15 ? 4 : State.streak >= 10 ? 3 : State.streak >= 6 ? 2 : 1) : 1);
+      const chimeTone = isClean
+        ? (State.streak >= 15 ? 4 : State.streak >= 10 ? 3 : State.streak >= 6 ? 2 : 1)
+        : (multiplier >= 2 ? 2 : 1);
+      Sound.chime(chimeTone);
     }, 45);
 
     // Dynamic Net Rip - pull net vertices down & outwards
@@ -1383,34 +1607,63 @@
       p.vx += (idx < hoop.netPoints.length / 2 ? -1 : 1) * (45 + Math.random() * 30);
     });
 
-    // Visual Floating Texts
+    // Visual Floating Announcements
     const midRimX = (hoop.rimFrontX + hoop.rimBackX) / 2;
-    if (isClean) {
-      addFloatingText('CLEAN SHOT! ✦', midRimX, hoop.rimY - 28, '#38bdf8', 28);
-    } else if (State.currentShot.backboardHits > 0) {
-      addFloatingText('BANK SHOT! 🎯', midRimX, hoop.rimY - 26, '#f59e0b', 25);
-    } else if (State.currentShot.rimHits >= 2) {
-      addFloatingText('RATTLE IN! ⚡', midRimX, hoop.rimY - 24, '#fbbf24', 24);
-    } else {
-      addFloatingText(`STREAK ${State.streak}!`, midRimX, hoop.rimY - 24, '#fbbf24', 24);
+    const scoreColor = isClean ? '#38bdf8' : (multiplier >= 2 ? '#fbbf24' : '#f59e0b');
+
+    // 1. Primary Points popup
+    addFloatingText(`+${shotPoints.toLocaleString()} PTS!`, midRimX, hoop.rimY - 26, scoreColor, 28);
+
+    // 2. Style, Distance, Sky & Multiplier Breakdown
+    const parts = [];
+    if (styleLabel) parts.push(styleLabel);
+    parts.push(distLabel);
+    if (isOffscreen && apexFeet > 0) parts.push(`${apexFeet}FT SKY`);
+    if (multiplier > 1) {
+      parts.push(`×${multiplier.toFixed(multiplier % 1 === 0 ? 0 : 1)}`);
+    }
+    const breakdown = parts.join(' • ');
+    setTimeout(() => {
+      addFloatingText(breakdown, midRimX, hoop.rimY - 50, '#e2e8f0', 19);
+    }, 90);
+
+    // Scarce Moonshot / Sky-Hook / Stratosphere callout
+    if (isOffscreen && heightLabel) {
+      setTimeout(() => {
+        let labelColor = '#c084fc';
+        if (apexFeet >= 160) labelColor = '#f43f5e';
+        else if (apexFeet >= 120) labelColor = '#a855f7';
+        addFloatingText(`${heightLabel} (${apexFeet} FT)`, midRimX, hoop.rimY - 96, labelColor, 24);
+      }, 230);
     }
 
-    // Milestone notifications
-    if (State.streak === 3) {
-      setTimeout(() => addFloatingText('HEATING UP! 🔥', midRimX, hoop.rimY - 56, '#10b981', 22), 220);
-    } else if (State.streak === 6) {
-      setTimeout(() => addFloatingText('SHARP SHOOTER! ⚡', midRimX, hoop.rimY - 56, '#c084fc', 24), 220);
-    } else if (State.streak === 10) {
-      setTimeout(() => addFloatingText('ON FIRE! 🔥🔥🔥', midRimX, hoop.rimY - 56, '#ef4444', 28), 220);
-    } else if (State.streak === 15) {
-      setTimeout(() => addFloatingText('LEGENDARY! 👑', midRimX, hoop.rimY - 56, '#f59e0b', 30), 220);
+    // 3. Streak Milestones
+    if (State.streak >= 2) {
+      setTimeout(() => {
+        let streakMsg = `STREAK ${State.streak}! 🔥`;
+        let streakColor = '#fbbf24';
+        if (State.streak === 3) {
+          streakMsg = 'HEATING UP! 🔥 (STREAK 3)';
+          streakColor = '#10b981';
+        } else if (State.streak === 6) {
+          streakMsg = 'SHARP SHOOTER! ⚡ (STREAK 6)';
+          streakColor = '#c084fc';
+        } else if (State.streak === 10) {
+          streakMsg = 'ON FIRE! 🔥🔥🔥 (STREAK 10)';
+          streakColor = '#ef4444';
+        } else if (State.streak === 15) {
+          streakMsg = 'LEGENDARY! 👑 (STREAK 15)';
+          streakColor = '#f59e0b';
+        }
+        addFloatingText(streakMsg, midRimX, hoop.rimY - 74, streakColor, 22);
+      }, 190);
     }
 
-    // Distance bonus celebrations for long-range shots
-    if (State.currentShot.distanceFeet >= 38) {
-      setTimeout(() => addFloatingText(`FROM DOWNTOWN! 💥 (${State.currentShot.distanceFeet} FT)`, midRimX, hoop.rimY - 50, '#ef4444', 26), 130);
-    } else if (State.currentShot.distanceFeet >= 28) {
-      setTimeout(() => addFloatingText(`DEEP 3-POINTER! 🎯 (${State.currentShot.distanceFeet} FT)`, midRimX, hoop.rimY - 48, '#f59e0b', 25), 130);
+    // 4. New High Score celebration!
+    if (isNewBestRun) {
+      setTimeout(() => {
+        addFloatingText('★ NEW HIGH SCORE! ★', midRimX, hoop.rimY - 96, '#f59e0b', 25);
+      }, 300);
     }
 
     // Confetti / Sparks celebration
@@ -1446,10 +1699,10 @@
     if (State.lifetimeBaskets >= 50) {
       unlockAchievement('total_50');
     }
-    if (State.currentShot.backboardHits > 0) {
+    if (isBank) {
       unlockAchievement('bank_shot');
     }
-    if (State.currentShot.distanceFeet >= 28) {
+    if (distFeet >= 28) {
       unlockAchievement('downtown_sniper');
     }
 
@@ -1462,11 +1715,20 @@
     State.phase = 'RESOLVING';
 
     if (!isScored) {
-      // Miss: streak resets
-      if (State.streak > 0) {
+      // Miss: Run ends, streak and current score reset!
+      if (State.score > 0) {
+        const finalScore = State.score;
+        if (finalScore >= State.highScore && State.highScore > 0) {
+          addFloatingText(`RUN OVER: ${finalScore.toLocaleString()} (NEW BEST!)`, ball.x, ball.y - 24, '#fbbf24', 23);
+        } else {
+          addFloatingText(`RUN OVER: ${finalScore.toLocaleString()} PTS`, ball.x, ball.y - 24, '#ef4444', 21);
+        }
+      } else if (State.streak > 0) {
         addFloatingText('STREAK LOST', ball.x, ball.y - 20, '#ef4444', 20);
       }
+      State.score = 0;
       State.streak = 0;
+      State.announcedHighScore = false;
       updateHUD();
     }
 
@@ -1811,9 +2073,11 @@
     if (ball.y < -ball.radius && State.phase === 'IN_FLIGHT') {
       ctx.save();
       const indicatorX = Math.max(24, Math.min(width - 24, ball.x));
-      const altitude = Math.round(Math.abs(ball.y));
-      ctx.fillStyle = '#ea580c';
+      const heightFt = getBallAltitudeFeet(ball.y);
+      const altText = `${heightFt} FT`;
+
       // Triangle pointer downwards
+      ctx.fillStyle = '#ea580c';
       ctx.beginPath();
       ctx.moveTo(indicatorX - 9, 8);
       ctx.lineTo(indicatorX + 9, 8);
@@ -1823,18 +2087,38 @@
 
       // Pulsing miniature ball indicator
       ctx.beginPath();
-      ctx.arc(indicatorX, 30, 8, 0, Math.PI * 2);
+      ctx.arc(indicatorX, 29, 7.5, 0, Math.PI * 2);
       ctx.fillStyle = '#f97316';
       ctx.fill();
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Altitude text badge
-      ctx.font = 'bold 11px system-ui, sans-serif';
-      ctx.textAlign = 'center';
+      // Altitude text badge in FT (consistent with FT popups & stats)
+      ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+      const textWidth = ctx.measureText(altText).width;
+      const bW = textWidth + 12;
+      const bH = 17;
+      const bX = indicatorX - bW / 2;
+      const bY = 47 - bH / 2;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(bX, bY, bW, bH, 8);
+      } else {
+        ctx.rect(bX, bY, bW, bH);
+      }
+      ctx.fill();
+
+      ctx.strokeStyle = '#f97316';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
       ctx.fillStyle = '#f8fafc';
-      ctx.fillText(`${altitude}px`, indicatorX, 48);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(altText, indicatorX, 47);
       ctx.restore();
     }
 
@@ -2566,6 +2850,27 @@
 
     dom.closeAchievementsBtn.addEventListener('click', () => dom.achievementsModal.close());
     dom.btnCloseAchievements.addEventListener('click', () => dom.achievementsModal.close());
+
+    // Shortcuts from inside Settings Modal to Locker & Achievements
+    const btnSettingsOpenSkins = document.getElementById('btnSettingsOpenSkins');
+    if (btnSettingsOpenSkins) {
+      btnSettingsOpenSkins.addEventListener('click', () => {
+        dom.settingsModal.close();
+        renderSkinsGrid();
+        if (typeof dom.skinsModal.showModal === 'function') dom.skinsModal.showModal();
+        else dom.skinsModal.setAttribute('open', '');
+      });
+    }
+
+    const btnSettingsOpenAch = document.getElementById('btnSettingsOpenAch');
+    if (btnSettingsOpenAch) {
+      btnSettingsOpenAch.addEventListener('click', () => {
+        dom.settingsModal.close();
+        renderAchievementsList();
+        if (typeof dom.achievementsModal.showModal === 'function') dom.achievementsModal.showModal();
+        else dom.achievementsModal.setAttribute('open', '');
+      });
+    }
 
     // Window Resize Observer
     window.addEventListener('resize', () => {

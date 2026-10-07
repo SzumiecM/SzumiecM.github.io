@@ -23,8 +23,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0b1320">
-  <link rel="stylesheet" href="style.css">
-  <link rel="preload" href="game.js" as="script">
+  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="preload" href="game.js?v=4" as="script">
 </head>
 
 <body>
@@ -48,23 +48,26 @@
         </div>
       </a>
 
-      <!-- Streak & Milestones Dashboard -->
-      <div class="stats-bar">
-        <div class="stat-pill streak-pill" id="hudStreakPill" title="Consecutive Baskets Streak">
+      <!-- Unified HUD Stats Capsule: Streak & Multiplier, Live Score & High Score -->
+      <div class="stats-bar" id="hudStatsBar">
+        <div class="hud-stat-item hud-streak-item" id="hudStreakWrap" title="Consecutive Streak & Multiplier">
           <span class="streak-flame" id="streakFlame" aria-hidden="true">🔥</span>
-          <span class="stat-label">STREAK</span>
-          <span class="stat-value" id="hudStreak">0</span>
-          <span class="tier-badge" id="hudTierBadge">ROOKIE</span>
+          <span class="stat-value hud-streak-val" id="hudStreak">0</span>
+          <span class="combo-badge hidden" id="hudMultiplier">×1.5</span>
         </div>
 
-        <div class="stat-pill best-pill" title="Personal Record Consecutive Streak">
-          <span class="stat-label">BEST STREAK</span>
-          <span class="stat-value" id="hudBestStreak">0</span>
+        <div class="hud-divider"></div>
+
+        <div class="hud-stat-item hud-score-item" title="Current Run Score">
+          <span class="stat-label">SCORE</span>
+          <span class="stat-value hud-score-val" id="hudScore">0</span>
         </div>
 
-        <div class="stat-pill total-pill" title="Total Career Baskets Scored">
-          <span class="stat-label">TOTAL</span>
-          <span class="stat-value" id="hudTotalBaskets">0</span>
+        <div class="hud-divider"></div>
+
+        <div class="hud-stat-item hud-best-item" title="All-Time High Score">
+          <span class="stat-label">BEST</span>
+          <span class="stat-value hud-best-val" id="hudHighScore">0</span>
         </div>
       </div>
 
@@ -113,9 +116,16 @@
 
     <!-- Zen Mode Floating Pill (active in fullscreen) -->
     <aside class="zen-pill hidden" id="zenPill" aria-label="Zen Mode Controls">
-      <div class="zen-streak" id="zenStreakWrap" title="Consecutive Baskets Streak">
-        <span class="zen-flame" aria-hidden="true">🔥</span>
-        <span class="zen-count" id="zenStreak">0</span>
+      <div class="zen-stats-group">
+        <div class="zen-stat-item zen-streak zen-streak-item" id="zenStreakWrap" title="Consecutive Streak & Multiplier">
+          <span class="zen-flame" id="zenFlame" aria-hidden="true">🔥</span>
+          <span class="zen-count" id="zenStreak">0</span>
+          <span class="zen-combo hidden" id="zenMultiplier">×1.5</span>
+        </div>
+        <div class="zen-divider"></div>
+        <div class="zen-stat-item zen-score-item" id="zenScoreWrap" title="Current Run Score">
+          <span class="zen-score-val" id="zenScore">0</span>
+        </div>
       </div>
       <button id="zenBtnMenu" class="zen-btn" aria-label="Toggle Full Menu" title="Toggle Menu">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -221,6 +231,58 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
+
+          <!-- Career Statistics -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Career Statistics</span>
+              <span class="setting-subtitle">All-time lifetime records & milestones</span>
+            </div>
+            <div class="career-stats-grid">
+              <div class="career-stat-card">
+                <span class="stat-num" id="statHighScore">0</span>
+                <span class="stat-name">High Score</span>
+              </div>
+              <div class="career-stat-card">
+                <span class="stat-num" id="statBestStreak">0</span>
+                <span class="stat-name">Max Streak</span>
+              </div>
+              <div class="career-stat-card">
+                <span class="stat-num" id="statTotalBaskets">0</span>
+                <span class="stat-name">Total Baskets</span>
+              </div>
+              <div class="career-stat-card">
+                <span class="stat-num" id="statCleanSwishes">0</span>
+                <span class="stat-name">Clean Swishes</span>
+              </div>
+              <div class="career-stat-card">
+                <span class="stat-num" id="statMaxHeight">--</span>
+                <span class="stat-name">Max Height</span>
+              </div>
+              <div class="career-stat-card">
+                <span class="stat-num" id="statLongestShot">0 FT</span>
+                <span class="stat-name">Longest Shot</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Customization & Achievements Quick Access -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Customization & Badges</span>
+              <span class="setting-subtitle">Change ball appearance and view milestones</span>
+            </div>
+            <div class="modal-action-row">
+              <button type="button" class="modal-action-btn" id="btnSettingsOpenSkins">
+                <span>🏀</span>
+                <span>Ball Skins</span>
+              </button>
+              <button type="button" class="modal-action-btn" id="btnSettingsOpenAch">
+                <span>🏆</span>
+                <span>Achievements</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="modal-footer">
@@ -267,9 +329,16 @@
       </div>
     </dialog>
 
+    <!-- Legacy backward-compatibility anchors (guarantees old cached scripts never throw TypeError) -->
+    <div style="display:none;" aria-hidden="true">
+      <span id="hudBestStreak">0</span>
+      <span id="hudTotalBaskets">0</span>
+      <span id="hudTierBadge">ROOKIE</span>
+    </div>
+
   </div>
 
-  <script src="game.js"></script>
+  <script src="game.js?v=4"></script>
 </body>
 
 </html>
