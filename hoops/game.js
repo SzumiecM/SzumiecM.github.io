@@ -1235,10 +1235,10 @@
     // Launch velocity: v = -k * (Δx, Δy) with calibrated ergonomic travel
     // Responsive vertical pull scaling:
     // Ensures mobile devices with shorter vertical screen space have the ergonomic pull
-    // needed to achieve high sky-hooks and 120ft+ Stratosphere shots fairly.
+    // needed to achieve high sky-hooks, stratosphere shots, and powerful floor bounces symmetrically.
     const screenScaleY = Math.max(1.0, 850 / Math.max(380, height));
     let vx = -K_LAUNCH_X * dx;
-    let vy = -K_LAUNCH_Y * dy * (dy > 0 ? screenScaleY : 1.0);
+    let vy = -K_LAUNCH_Y * dy * screenScaleY;
 
     const speed = Math.hypot(vx, vy);
     // Uncapped strength: you can pull as hard as you want and launch it into space!
@@ -1475,13 +1475,20 @@
           b.y = floorY - b.radius;
           if (b.vy > 0) {
             const impact = Math.abs(b.vy) / 600;
+            // Adaptive Floor Restitution:
+            // On short/widescreen viewports (mobile landscape), slightly elevate restitution
+            // and forward momentum retention so floor-bounce shots can reach the basket naturally.
+            const isShortLandscape = height < 520 && width > height * 1.3;
+            const floorRestitution = isShortLandscape ? 0.72 : RESTITUTION_FLOOR;
+            const forwardRetain = isShortLandscape ? 0.90 : 0.84;
+
             if (b.vy > 35) {
-              b.vy = -b.vy * RESTITUTION_FLOOR;
+              b.vy = -b.vy * floorRestitution;
             } else {
               b.vy = 0;
             }
             b.angularVelocity *= 0.76;
-            b.vx *= 0.84;
+            b.vx *= forwardRetain;
 
             const now = performance.now();
             if (now - (b.lastBounceTime || 0) > 90 && impact > 0.08) {
@@ -1570,10 +1577,10 @@
 
       // Unresolved shot resting or timeout check
       if (!b.shotData.resolved) {
-        // Floor-bounced balls get a calibrated ~1.6s window (~2x normal) to reach the hoop, then promptly resolve
+        // Floor-bounced balls get a calibrated ~2.0s window (~2.5x normal) to reach the hoop, then promptly resolve
         if (b.shotData.hitFloor) {
           b.timeSinceFloor = (b.timeSinceFloor || 0) + dt;
-          if (b.timeSinceFloor > 1.6 || (ballSpeed < 28 && b.y >= floorY - b.radius - 3)) {
+          if (b.timeSinceFloor > 2.0 || (ballSpeed < 28 && b.y >= floorY - b.radius - 3)) {
             if (!b.shotData.scored) {
               handleShotMiss(b);
             }
@@ -3729,52 +3736,28 @@
 
     ctx.save();
 
-    // Smoothed drag offset from touch-down
+    // Smoothed drag offset from touch-down scaled to match true velocity vector
     const dragX = State.aimSmooth.x - State.aimStart.x;
     const dragY = State.aimSmooth.y - State.aimStart.y;
+    const screenScaleY = Math.max(1.0, 850 / Math.max(380, height));
+    const pullX = dragX;
+    const pullY = dragY * screenScaleY;
 
-    // Tactical Slingshot Pull Guideline from Ball to Touch Vector
+    // Tactical Slingshot Pull Guideline from Ball (perfect 1:1 angular match with trajectory)
     ctx.strokeStyle = 'rgba(234, 88, 12, 0.55)';
     ctx.lineWidth = 2.5;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.moveTo(activeBall.originX, activeBall.originY);
-    ctx.lineTo(activeBall.originX + dragX, activeBall.originY + dragY);
+    ctx.lineTo(activeBall.originX + pullX, activeBall.originY + pullY);
     ctx.stroke();
     ctx.setLineDash([]);
 
     // Tactile slingshot pull bead at ball
     ctx.beginPath();
-    ctx.arc(activeBall.originX + dragX, activeBall.originY + dragY, 5, 0, Math.PI * 2);
+    ctx.arc(activeBall.originX + pullX, activeBall.originY + pullY, 5, 0, Math.PI * 2);
     ctx.fillStyle = '#ea580c';
     ctx.fill();
-
-    // If touch started away from ball (e.g. thumb on right side), draw subtle tactile reticle at finger
-    const touchDistFromBall = Math.hypot(State.aimStart.x - activeBall.originX, State.aimStart.y - activeBall.originY);
-    if (touchDistFromBall > activeBall.radius * 2.5) {
-      // Touch anchor ring
-      ctx.beginPath();
-      ctx.arc(State.aimStart.x, State.aimStart.y, 9, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Dashed connector to thumb position
-      ctx.beginPath();
-      ctx.setLineDash([3, 3]);
-      ctx.moveTo(State.aimStart.x, State.aimStart.y);
-      ctx.lineTo(State.aimSmooth.x, State.aimSmooth.y);
-      ctx.strokeStyle = 'rgba(234, 88, 12, 0.35)';
-      ctx.lineWidth = 1.8;
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Current thumb bead
-      ctx.beginPath();
-      ctx.arc(State.aimSmooth.x, State.aimSmooth.y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(234, 88, 12, 0.65)';
-      ctx.fill();
-    }
 
     // Predictive Forward Kinematic Simulation Points
     // Smooth gradual trajectory shortening based on exact streak, always 1:1 with flight
