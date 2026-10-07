@@ -1,8 +1,8 @@
 :root {
   color-scheme: dark;
   /* Dynamic atmosphere gradient - interpolated dynamically in JS */
-  --bg-top: #1e293b;
-  --bg-bottom: #0f172a;
+  --bg-top: #161e2e;
+  --bg-bottom: #0b101c;
 
   --court-wood: rgba(255, 255, 255, 0.03);
   --court-lines: rgba(255, 255, 255, 0.06);
@@ -89,8 +89,8 @@ body {
 
 /* GPU-composited Tier Atmosphere Transitions (zero per-frame style recalculation) */
 .game-wrapper.tier-rookie {
-  --bg-top: #1e293b;
-  --bg-bottom: #0f172a;
+  --bg-top: #161e2e;
+  --bg-bottom: #0b101c;
 }
 
 .game-wrapper.tier-heating {

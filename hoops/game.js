@@ -85,8 +85,8 @@
       id: 'rookie',
       name: 'ROOKIE',
       minStreak: 0,
-      top: [30, 41, 59],
-      bottom: [15, 23, 42]
+      top: [22, 30, 46],
+      bottom: [11, 16, 28]
     },
     {
       id: 'heating',
@@ -2053,8 +2053,8 @@
   // ==========================================
   // 8. PROCEDURAL RENDERING ROUTINES
   // ==========================================
-
-  // Procedural Ball Skins (No bitmap images required)
+  // Procedural Pop-Art Ball Skins
+  // ==========================================
   function renderBallSkin(targetCtx, x, y, r, angle, skinId) {
     targetCtx.save();
     targetCtx.translate(x, y);
@@ -2079,34 +2079,51 @@
         break;
     }
 
-    // Outer subtle ambient shadow and rim light
+    // 1. Dual Comic Contour: Outer white rim light (ensures 100% contrast on dark backgrounds)
+    targetCtx.beginPath();
+    targetCtx.arc(0, 0, r + 0.8, 0, Math.PI * 2);
+    targetCtx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+    targetCtx.lineWidth = 1.4;
+    targetCtx.stroke();
+
+    // 2. Bold Comic Pop-Art Midnight Ink Outline
     targetCtx.beginPath();
     targetCtx.arc(0, 0, r, 0, Math.PI * 2);
-    targetCtx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-    targetCtx.lineWidth = 1.2;
+    targetCtx.strokeStyle = '#0a0f1d';
+    targetCtx.lineWidth = Math.max(2.8, r * 0.088);
     targetCtx.stroke();
 
     targetCtx.restore();
   }
 
   function renderClassicSkin(c, r) {
-    // Orange radial gradient
-    const grad = c.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r);
-    grad.addColorStop(0, '#fb923c');
-    grad.addColorStop(0.65, '#ea580c');
-    grad.addColorStop(1, '#9a3412');
-
+    // 1. Saturated Pop-Art Orange base
     c.beginPath();
     c.arc(0, 0, r, 0, Math.PI * 2);
-    c.fillStyle = grad;
+    c.fillStyle = '#f97316';
     c.fill();
 
-    // Seams
-    c.strokeStyle = '#431407';
-    c.lineWidth = Math.max(1.5, r * 0.08);
+    // 2. Comic Cel-Shaded Shadow Crescent (bottom-right)
+    c.save();
+    c.beginPath();
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.clip();
+
+    const shadowGrad = c.createRadialGradient(r * 0.45, r * 0.45, r * 0.1, r * 0.45, r * 0.45, r * 1.05);
+    shadowGrad.addColorStop(0, '#c2410c');
+    shadowGrad.addColorStop(0.55, '#9a3412');
+    shadowGrad.addColorStop(1, 'rgba(154, 52, 18, 0)');
+    c.beginPath();
+    c.arc(r * 0.35, r * 0.35, r * 0.95, 0, Math.PI * 2);
+    c.fillStyle = shadowGrad;
+    c.fill();
+
+    // 3. Bold Comic Ink Seams
+    c.strokeStyle = '#0a0f1d';
+    c.lineWidth = Math.max(2.4, r * 0.088);
     c.lineCap = 'round';
 
-    // Horizontal & Vertical seams
+    // Horizontal & Vertical cross-seams
     c.beginPath();
     c.moveTo(-r, 0);
     c.lineTo(r, 0);
@@ -2114,7 +2131,7 @@
     c.lineTo(0, r);
     c.stroke();
 
-    // Symmetrical side curved arcs
+    // Symmetrical curved comic arcs
     c.beginPath();
     c.arc(-r * 0.95, 0, r * 0.75, -Math.PI * 0.35, Math.PI * 0.35);
     c.stroke();
@@ -2123,62 +2140,77 @@
     c.arc(r * 0.95, 0, r * 0.75, Math.PI * 0.65, Math.PI * 1.35);
     c.stroke();
 
-    // Specular highlight
-    const spec = c.createRadialGradient(-r * 0.35, -r * 0.35, 0, -r * 0.35, -r * 0.35, r * 0.65);
-    spec.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
-    spec.addColorStop(0.5, 'rgba(255, 255, 255, 0.05)');
-    spec.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    // 4. Iconic Comic Pop Specular Shine (upper-left glint arc + dot)
     c.beginPath();
-    c.arc(0, 0, r, 0, Math.PI * 2);
-    c.fillStyle = spec;
+    c.arc(-r * 0.15, -r * 0.15, r * 0.62, -Math.PI * 0.88, -Math.PI * 0.38);
+    c.strokeStyle = 'rgba(255, 255, 255, 0.88)';
+    c.lineWidth = Math.max(2.5, r * 0.095);
+    c.lineCap = 'round';
+    c.stroke();
+
+    // Glint dot
+    c.beginPath();
+    c.arc(-r * 0.52, -r * 0.52, Math.max(1.6, r * 0.08), 0, Math.PI * 2);
+    c.fillStyle = '#ffffff';
     c.fill();
+
+    c.restore();
   }
 
   function renderWatermelonSkin(c, r) {
-    // Jade / Emerald exterior
-    const grad = c.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r);
-    grad.addColorStop(0, '#34d399');
-    grad.addColorStop(0.7, '#059669');
-    grad.addColorStop(1, '#064e3b');
-
+    // 1. Pop Emerald Green base
     c.beginPath();
     c.arc(0, 0, r, 0, Math.PI * 2);
-    c.fillStyle = grad;
+    c.fillStyle = '#10b981';
     c.fill();
 
-    // Dark wavy green longitudinal stripes
+    // 2. Cel-shaded shadow crescent
     c.save();
     c.beginPath();
     c.arc(0, 0, r, 0, Math.PI * 2);
     c.clip();
 
+    const shadowGrad = c.createRadialGradient(r * 0.45, r * 0.45, r * 0.1, r * 0.45, r * 0.45, r * 1.05);
+    shadowGrad.addColorStop(0, '#047857');
+    shadowGrad.addColorStop(0.6, '#064e3b');
+    shadowGrad.addColorStop(1, 'rgba(6, 78, 59, 0)');
+    c.beginPath();
+    c.arc(r * 0.35, r * 0.35, r * 0.95, 0, Math.PI * 2);
+    c.fillStyle = shadowGrad;
+    c.fill();
+
+    // 3. Bold comic wavy longitudinal stripes
     c.strokeStyle = '#022c22';
-    c.lineWidth = r * 0.18;
+    c.lineWidth = r * 0.2;
     [-0.55, 0, 0.55].forEach(offset => {
       c.beginPath();
       c.moveTo(offset * r, -r);
       for (let y = -r; y <= r; y += 8) {
-        const wave = Math.sin(y * 0.2) * (r * 0.12);
+        const wave = Math.sin(y * 0.22) * (r * 0.14);
         c.lineTo(offset * r + wave, y);
       }
       c.stroke();
     });
 
-    c.restore();
-
-    // Specular gloss
-    const spec = c.createRadialGradient(-r * 0.35, -r * 0.35, 0, -r * 0.35, -r * 0.35, r * 0.6);
-    spec.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-    spec.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    // 4. Comic glint shine arc + dot
     c.beginPath();
-    c.arc(0, 0, r, 0, Math.PI * 2);
-    c.fillStyle = spec;
+    c.arc(-r * 0.15, -r * 0.15, r * 0.62, -Math.PI * 0.88, -Math.PI * 0.38);
+    c.strokeStyle = 'rgba(255, 255, 255, 0.82)';
+    c.lineWidth = Math.max(2.4, r * 0.09);
+    c.lineCap = 'round';
+    c.stroke();
+
+    c.beginPath();
+    c.arc(-r * 0.52, -r * 0.52, Math.max(1.6, r * 0.08), 0, Math.PI * 2);
+    c.fillStyle = '#ffffff';
     c.fill();
+
+    c.restore();
   }
 
   function renderBeachBallSkin(c, r) {
-    // 6 Alternating colored wedges
-    const colors = ['#ef4444', '#ffffff', '#3b82f6', '#ffffff', '#eab308', '#ffffff'];
+    // 6 Alternating bold pop-art wedges
+    const colors = ['#ef4444', '#ffffff', '#06b6d4', '#ffffff', '#eab308', '#ffffff'];
     const wedgeAngle = (Math.PI * 2) / 6;
 
     for (let i = 0; i < 6; i++) {
@@ -2188,35 +2220,57 @@
       c.closePath();
       c.fillStyle = colors[i];
       c.fill();
-      c.strokeStyle = 'rgba(0, 0, 0, 0.15)';
-      c.lineWidth = 1;
+
+      // Comic wedge ink dividers
+      c.strokeStyle = '#0a0f1d';
+      c.lineWidth = 1.8;
       c.stroke();
     }
 
-    // Top circular cap
+    // Top circular cap button with black ink ring
     c.beginPath();
-    c.arc(0, 0, r * 0.24, 0, Math.PI * 2);
+    c.arc(0, 0, r * 0.25, 0, Math.PI * 2);
     c.fillStyle = '#ffffff';
     c.fill();
-    c.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+    c.strokeStyle = '#0a0f1d';
+    c.lineWidth = 2.2;
     c.stroke();
 
-    // Specular gloss
-    const spec = c.createRadialGradient(-r * 0.35, -r * 0.35, 0, 0, 0, r);
-    spec.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
-    spec.addColorStop(0.6, 'rgba(255, 255, 255, 0.05)');
-    spec.addColorStop(1, 'rgba(0, 0, 0, 0.15)');
+    // Cel-shaded shadow overlay
+    c.save();
     c.beginPath();
     c.arc(0, 0, r, 0, Math.PI * 2);
-    c.fillStyle = spec;
+    c.clip();
+
+    const shadowGrad = c.createRadialGradient(r * 0.45, r * 0.45, r * 0.1, r * 0.45, r * 0.45, r * 1.05);
+    shadowGrad.addColorStop(0, 'rgba(10, 15, 29, 0.4)');
+    shadowGrad.addColorStop(1, 'rgba(10, 15, 29, 0)');
+    c.beginPath();
+    c.arc(r * 0.35, r * 0.35, r * 0.95, 0, Math.PI * 2);
+    c.fillStyle = shadowGrad;
     c.fill();
+
+    // Comic specular shine arc + dot
+    c.beginPath();
+    c.arc(-r * 0.15, -r * 0.15, r * 0.62, -Math.PI * 0.88, -Math.PI * 0.38);
+    c.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    c.lineWidth = Math.max(2.4, r * 0.09);
+    c.lineCap = 'round';
+    c.stroke();
+
+    c.beginPath();
+    c.arc(-r * 0.52, -r * 0.52, Math.max(1.6, r * 0.08), 0, Math.PI * 2);
+    c.fillStyle = '#ffffff';
+    c.fill();
+
+    c.restore();
   }
 
   function renderFireSkin(c, r) {
-    // Molten Core gradient
+    // 1. Comic Anime/Manga Fire core
     const grad = c.createRadialGradient(-r * 0.2, -r * 0.2, r * 0.05, 0, 0, r);
     grad.addColorStop(0, '#fef08a');
-    grad.addColorStop(0.35, '#f59e0b');
+    grad.addColorStop(0.3, '#f97316');
     grad.addColorStop(0.75, '#ef4444');
     grad.addColorStop(1, '#7f1d1d');
 
@@ -2225,63 +2279,136 @@
     c.fillStyle = grad;
     c.fill();
 
-    // Swirling flame accents
-    c.strokeStyle = '#fee2e2';
-    c.lineWidth = r * 0.07;
+    // 2. Swirling comic flame tongues with ink accents
+    c.strokeStyle = '#0a0f1d';
+    c.lineWidth = r * 0.12;
+    c.lineCap = 'round';
     c.beginPath();
-    c.arc(0, 0, r * 0.55, 0.2, Math.PI * 0.9);
+    c.arc(0, 0, r * 0.58, 0.15, Math.PI * 0.95);
+    c.stroke();
+
+    c.strokeStyle = '#fef08a';
+    c.lineWidth = r * 0.08;
+    c.beginPath();
+    c.arc(0, 0, r * 0.58, 0.2, Math.PI * 0.9);
+    c.stroke();
+
+    c.strokeStyle = '#0a0f1d';
+    c.lineWidth = r * 0.12;
+    c.beginPath();
+    c.arc(0, 0, r * 0.72, Math.PI * 1.08, Math.PI * 1.88);
     c.stroke();
 
     c.strokeStyle = '#fde047';
+    c.lineWidth = r * 0.08;
     c.beginPath();
     c.arc(0, 0, r * 0.72, Math.PI * 1.1, Math.PI * 1.85);
     c.stroke();
 
-    // Inner fiery bloom
+    // Inner fiery bloom & glint
     c.beginPath();
     c.arc(-r * 0.15, -r * 0.15, r * 0.35, 0, Math.PI * 2);
-    c.fillStyle = 'rgba(254, 240, 138, 0.5)';
+    c.fillStyle = 'rgba(254, 240, 138, 0.65)';
+    c.fill();
+
+    // Starburst comic glint
+    c.beginPath();
+    c.arc(-r * 0.35, -r * 0.35, r * 0.15, 0, Math.PI * 2);
+    c.fillStyle = '#ffffff';
     c.fill();
   }
 
   function renderEightBallSkin(c, r) {
-    // Deep black sphere with glossy shading
-    const grad = c.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.05, 0, 0, r);
-    grad.addColorStop(0, '#334155');
-    grad.addColorStop(0.4, '#1e293b');
-    grad.addColorStop(0.85, '#0f172a');
-    grad.addColorStop(1, '#020617');
-
+    // 1. Sleek comic sphere body: rich midnight-slate tone that detaches from dark backgrounds
     c.beginPath();
     c.arc(0, 0, r, 0, Math.PI * 2);
-    c.fillStyle = grad;
+    c.fillStyle = '#1e293b';
     c.fill();
 
-    // Crisp white center circle
+    c.save();
     c.beginPath();
-    c.arc(0, 0, r * 0.44, 0, Math.PI * 2);
-    c.fillStyle = '#f8fafc';
+    c.arc(0, 0, r, 0, Math.PI * 2);
+    c.clip();
+
+    // Deep cel-shaded black shadow crescent
+    const shadowGrad = c.createRadialGradient(r * 0.35, r * 0.35, r * 0.1, r * 0.35, r * 0.35, r * 1.05);
+    shadowGrad.addColorStop(0, '#090d16');
+    shadowGrad.addColorStop(0.7, '#020617');
+    shadowGrad.addColorStop(1, 'rgba(2, 6, 23, 0)');
+    c.beginPath();
+    c.arc(r * 0.35, r * 0.35, r * 0.95, 0, Math.PI * 2);
+    c.fillStyle = shadowGrad;
     c.fill();
 
-    // Sharp black number 8
-    c.fillStyle = '#0f172a';
-    c.font = `bold ${Math.round(r * 0.54)}px system-ui, sans-serif`;
+    // 2. Comic Bounce Light / Rim Light Crescent on the shadow side!
+    // Cyan/white reflected court light outlining the dark edge against dark backgrounds!
+    c.beginPath();
+    c.arc(r * 0.08, r * 0.08, r * 0.88, Math.PI * 0.12, Math.PI * 0.68);
+    c.strokeStyle = '#38bdf8'; // electric cyan bounce light!
+    c.lineWidth = Math.max(2.2, r * 0.08);
+    c.lineCap = 'round';
+    c.stroke();
+
+    // 3. Crisp white center disc with comic ink outline
+    c.beginPath();
+    c.arc(0, 0, r * 0.45, 0, Math.PI * 2);
+    c.fillStyle = '#ffffff';
+    c.fill();
+    c.strokeStyle = '#0a0f1d';
+    c.lineWidth = 2.4;
+    c.stroke();
+
+    // 4. Heavy black comic numeral '8'
+    c.fillStyle = '#0a0f1d';
+    c.font = `900 ${Math.round(r * 0.58)}px system-ui, -apple-system, sans-serif`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.fillText('8', 0, 1);
 
-    // Specular gloss
-    const spec = c.createRadialGradient(-r * 0.4, -r * 0.4, 0, -r * 0.4, -r * 0.4, r * 0.5);
-    spec.addColorStop(0, 'rgba(255, 255, 255, 0.6)');
-    spec.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    // 5. High-contrast comic specular shine arc + glint dot on upper-left
     c.beginPath();
-    c.arc(0, 0, r, 0, Math.PI * 2);
-    c.fillStyle = spec;
+    c.arc(-r * 0.15, -r * 0.15, r * 0.62, -Math.PI * 0.88, -Math.PI * 0.38);
+    c.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    c.lineWidth = Math.max(2.6, r * 0.098);
+    c.lineCap = 'round';
+    c.stroke();
+
+    c.beginPath();
+    c.arc(-r * 0.52, -r * 0.52, Math.max(1.8, r * 0.085), 0, Math.PI * 2);
+    c.fillStyle = '#ffffff';
     c.fill();
+
+    // 6. Perimeter Comic Silhouette Rim Light (Electric edge light)
+    c.beginPath();
+    c.arc(0, 0, r - 1, 0, Math.PI * 2);
+    c.strokeStyle = 'rgba(255, 255, 255, 0.42)';
+    c.lineWidth = 1.6;
+    c.stroke();
+
+    c.restore();
   }
 
   function renderCourtFloor() {
-    // Clean seamless court floor without decorative background lines
+    // Graphic Comic Pop-Art Baseline
+    const floorY = height - 12;
+    ctx.save();
+    // Solid midnight ink floor line
+    ctx.strokeStyle = '#0a0f1d';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, floorY);
+    ctx.lineTo(width, floorY);
+    ctx.stroke();
+
+    // Graphic pop accent line above baseline
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, floorY - 3);
+    ctx.lineTo(width, floorY - 3);
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   // ------------------------------------------
@@ -2293,6 +2420,18 @@
 
     // 0. Hardwood Floor Baseline & 3-Point Boundary
     renderCourtFloor();
+
+    // Subtle ambient stadium court halo behind hoop & play zone for rich contrast
+    ctx.save();
+    const hoopSpot = ctx.createRadialGradient(hoop.rimFrontX, hoop.rimY, 15, hoop.rimFrontX, hoop.rimY, Math.max(280, width * 0.45));
+    hoopSpot.addColorStop(0, 'rgba(56, 189, 248, 0.09)');
+    hoopSpot.addColorStop(0.6, 'rgba(30, 41, 59, 0.04)');
+    hoopSpot.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = hoopSpot;
+    ctx.beginPath();
+    ctx.arc(hoop.rimFrontX, hoop.rimY, Math.max(280, width * 0.45), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
 
     // 1. Backboard Pole & Mounting Brackets (Background)
     renderBackboard();
@@ -2314,16 +2453,16 @@
       ctx.globalAlpha = b.opacity;
       const renderRadius = b.radius * b.scale;
 
-      // Soft ground contact shadow when resting or near floor
+      // Comic Pop-Art cel-shaded contact shadow when near floor
       if (b.y > height * 0.45) {
         const groundY = height - 12;
         const distToGround = Math.max(0, groundY - b.y);
         const shadowScale = Math.max(0.2, 1 - distToGround / 350);
-        const shadowAlpha = Math.min(0.35, 0.35 * shadowScale);
+        const shadowAlpha = Math.min(0.45, 0.45 * shadowScale);
 
         ctx.beginPath();
-        ctx.ellipse(b.x, groundY, renderRadius * shadowScale * 1.2, 5 * shadowScale, 0, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+        ctx.ellipse(b.x, groundY, renderRadius * shadowScale * 1.15, 4.5 * shadowScale, 0, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(10, 15, 29, ${shadowAlpha})`;
         ctx.fill();
       }
 
@@ -2331,42 +2470,43 @@
       ctx.restore();
     }
 
-    // 4a. Shot Zone & Distance Badge floating above active ball when aiming or idle
+    // 4a. Shot Zone & Distance Badge floating above active ball when aiming or idle (Comic Pop-Art Badge)
     if (activeBall && !activeBall.isLaunched && activeBall.shotData.distanceFeet && activeBall.scale >= 0.5) {
       ctx.save();
       ctx.globalAlpha = activeBall.opacity;
       const renderRadius = activeBall.radius * activeBall.scale;
       const badgeY = activeBall.originY - renderRadius - 20;
       const badgeText = `${activeBall.shotData.zoneName} • ${activeBall.shotData.distanceFeet} FT`;
-      ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+      ctx.font = '900 11px system-ui, -apple-system, sans-serif';
       const textWidth = ctx.measureText(badgeText).width;
-      const padX = 8;
+      const padX = 9;
       const bWidth = textWidth + padX * 2;
-      const bHeight = 19;
+      const bHeight = 20;
       const bX = activeBall.originX - bWidth / 2;
       const bY = badgeY - bHeight / 2;
 
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      // Comic badge background & midnight ink outline
+      ctx.fillStyle = 'rgba(10, 15, 29, 0.92)';
       ctx.beginPath();
       if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(bX, bY, bWidth, bHeight, 9);
+        ctx.roundRect(bX, bY, bWidth, bHeight, 10);
       } else {
         ctx.rect(bX, bY, bWidth, bHeight);
       }
       ctx.fill();
 
       ctx.strokeStyle = activeBall.shotData.zoneColor || '#38bdf8';
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 2.0;
       ctx.stroke();
 
-      ctx.fillStyle = activeBall.shotData.zoneColor || '#38bdf8';
+      ctx.fillStyle = '#f8fafc';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(badgeText, activeBall.originX, badgeY);
+      ctx.fillText(badgeText, activeBall.originX, badgeY + 0.5);
       ctx.restore();
     }
 
-    // 4b. Space Altitude Indicators: for any launched balls in high flight above canvas
+    // 4b. Space Altitude Indicators: for any launched balls in high flight above canvas (Comic Pop Indicator)
     for (let i = 0; i < balls.length; i++) {
       const b = balls[i];
       if (b.isLaunched && b.y < -b.radius && !b.shotData.resolved) {
@@ -2375,49 +2515,58 @@
         const heightFt = getBallAltitudeFeet(b.y);
         const altText = `${heightFt} FT`;
 
-        // Triangle pointer downwards
-        ctx.fillStyle = '#ea580c';
+        // Triangle pointer downwards with midnight ink border
         ctx.beginPath();
-        ctx.moveTo(indicatorX - 9, 8);
-        ctx.lineTo(indicatorX + 9, 8);
-        ctx.lineTo(indicatorX, 19);
+        ctx.moveTo(indicatorX - 10, 7);
+        ctx.lineTo(indicatorX + 10, 7);
+        ctx.lineTo(indicatorX, 20);
         ctx.closePath();
-        ctx.fill();
-
-        // Pulsing miniature ball indicator
-        ctx.beginPath();
-        ctx.arc(indicatorX, 29, 7.5, 0, Math.PI * 2);
         ctx.fillStyle = '#f97316';
         ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#0a0f1d';
+        ctx.lineWidth = 1.8;
         ctx.stroke();
 
+        // Pulsing miniature comic ball indicator
+        ctx.beginPath();
+        ctx.arc(indicatorX, 31, 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#f97316';
+        ctx.fill();
+        ctx.strokeStyle = '#0a0f1d';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // White comic glint on mini ball
+        ctx.beginPath();
+        ctx.arc(indicatorX - 2.5, 28.5, 2, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+
         // Altitude text badge in FT
-        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+        ctx.font = '900 11px system-ui, -apple-system, sans-serif';
         const textWidth = ctx.measureText(altText).width;
         const bW = textWidth + 12;
-        const bH = 17;
+        const bH = 18;
         const bX = indicatorX - bW / 2;
-        const bY = 47 - bH / 2;
+        const bY = 50 - bH / 2;
 
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        ctx.fillStyle = 'rgba(10, 15, 29, 0.92)';
         ctx.beginPath();
         if (typeof ctx.roundRect === 'function') {
-          ctx.roundRect(bX, bY, bW, bH, 8);
+          ctx.roundRect(bX, bY, bW, bH, 9);
         } else {
           ctx.rect(bX, bY, bW, bH);
         }
         ctx.fill();
 
         ctx.strokeStyle = '#f97316';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.8;
         ctx.stroke();
 
         ctx.fillStyle = '#f8fafc';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(altText, indicatorX, 47);
+        ctx.fillText(altText, indicatorX, 50.5);
         ctx.restore();
       }
     }
@@ -2435,62 +2584,98 @@
   function renderBackboard() {
     ctx.save();
 
-    // Support pole extending to outer edge
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 6;
+    const isLeft = (State.hoopSide === 'left');
+    const wallX = isLeft ? 0 : width;
+
+    // 1. Support pole extending to outer edge (Bold comic steel)
+    ctx.strokeStyle = '#0a0f1d';
+    ctx.lineWidth = 8;
     ctx.beginPath();
     ctx.moveTo(hoop.backboardX, hoop.y);
-    ctx.lineTo(State.hoopSide === 'left' ? 0 : width, hoop.y);
+    ctx.lineTo(wallX, hoop.y);
     ctx.stroke();
 
-    // Mounting bracket to back rim
-    ctx.strokeStyle = '#ea580c';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 4.5;
+    ctx.stroke();
+
+    // 2. Mounting bracket to back rim (Bold comic fiery bracket)
+    ctx.strokeStyle = '#0a0f1d';
+    ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.moveTo(hoop.backboardX, hoop.y);
     ctx.lineTo(hoop.rimBackX, hoop.rimY);
     ctx.stroke();
 
-    // Acrylic / Glass Backboard
-    const bbWidth = 9;
+    ctx.strokeStyle = '#f97316';
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+
+    // 3. Comic Pop-Art Acrylic / Glass Backboard
+    // Wider, authentic tempered glass board
+    const bbWidth = 12;
     const bbX = hoop.backboardX - bbWidth / 2;
     const bbY = hoop.backboardTop;
     const bbH = hoop.backboardBottom - hoop.backboardTop;
 
-    // Glass glow fill
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    // Luminous frosted acrylic pane with high-contrast comic glow
+    ctx.fillStyle = 'rgba(224, 242, 254, 0.42)'; // luminous frosted glass!
     ctx.fillRect(bbX, bbY, bbWidth, bbH);
 
-    // Border frame
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 2.5;
+    // Inner bright glass highlight fill
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.fillRect(bbX + 2, bbY + 2, bbWidth - 4, bbH - 4);
+
+    // Iconic Comic Glass Reflection Slashes (bright white reflective shine)
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(bbX + 1.5, bbY + bbH * 0.20);
+    ctx.lineTo(bbX + bbWidth - 1.5, bbY + bbH * 0.20 + bbWidth * 0.9);
+    ctx.moveTo(bbX + 1.5, bbY + bbH * 0.32);
+    ctx.lineTo(bbX + bbWidth - 1.5, bbY + bbH * 0.32 + bbWidth * 0.9);
+    ctx.stroke();
+
+    // Solid outer midnight ink contour
+    ctx.strokeStyle = '#0a0f1d';
+    ctx.lineWidth = 4.0;
     ctx.strokeRect(bbX, bbY, bbWidth, bbH);
+
+    // Solid, radiant white enamel perimeter frame (authentic tempered glass backboard frame!)
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.0;
+    ctx.strokeRect(bbX + 1, bbY + 1, bbWidth - 2, bbH - 2);
 
     // Inner target square on backboard (on court-facing edge of glass)
     const targetH = bbH * 0.35;
     const targetTop = hoop.rimY - targetH + 4;
-    const targetX = State.hoopSide === 'left' ? bbX + bbWidth - 1 : bbX + 1;
-    ctx.strokeStyle = '#ef4444';
-    ctx.lineWidth = 2;
+    const targetX = isLeft ? bbX + bbWidth - 2 : bbX + 2;
+
+    // Target rectangle: white backing keyline + pop red/magenta comic line
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4.5;
     ctx.beginPath();
     ctx.moveTo(targetX, targetTop);
     ctx.lineTo(targetX, targetTop + targetH);
     ctx.stroke();
 
-    // Back rim ellipse line
-    ctx.strokeStyle = '#c2410c';
-    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 2.6;
+    ctx.stroke();
+
+    // Back rim ellipse line (heavy ink under-stroke, fiery orange core)
+    const rimMidX = (hoop.rimFrontX + hoop.rimBackX) / 2;
+    const rimRadiusX = Math.abs(hoop.rimBackX - hoop.rimFrontX) / 2;
+
+    ctx.strokeStyle = '#0a0f1d';
+    ctx.lineWidth = 5.5;
     ctx.beginPath();
-    ctx.ellipse(
-      (hoop.rimFrontX + hoop.rimBackX) / 2,
-      hoop.rimY,
-      Math.abs(hoop.rimBackX - hoop.rimFrontX) / 2,
-      3.2,
-      0,
-      Math.PI,
-      0,
-      true
-    );
+    ctx.ellipse(rimMidX, hoop.rimY, rimRadiusX, 3.2, 0, Math.PI, 0, true);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#c2410c';
+    ctx.lineWidth = 3.2;
     ctx.stroke();
 
     ctx.restore();
@@ -2500,17 +2685,26 @@
     if (hoop.netPoints.length === 0) return;
 
     ctx.save();
-    ctx.strokeStyle = frontOnly ? 'rgba(241, 245, 249, 0.92)' : 'rgba(148, 163, 184, 0.45)';
-    ctx.lineWidth = frontOnly ? 1.6 : 1.2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
     const count = hoop.netPoints.length;
+
+    if (frontOnly) {
+      // Front net: Graphic comic white rope strands
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 2.4;
+    } else {
+      // Back net: Stylized dark slate comic ropes
+      ctx.strokeStyle = 'rgba(100, 116, 139, 0.65)';
+      ctx.lineWidth = 1.8;
+    }
 
     // Vertical strands
     for (let i = 0; i < count; i++) {
       const p = hoop.netPoints[i];
       ctx.beginPath();
       ctx.moveTo(p.topX, p.topY);
-      // Gentle curve to bottom displaced vertex
       const ctrlX = (p.topX + p.x) / 2;
       const ctrlY = (p.topY + p.y) / 2;
       ctx.quadraticCurveTo(ctrlX, ctrlY, p.x, p.y);
@@ -2518,6 +2712,14 @@
     }
 
     // Horizontal diamond cross-ribs
+    if (frontOnly) {
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 2.0;
+    } else {
+      ctx.strokeStyle = 'rgba(71, 85, 105, 0.55)';
+      ctx.lineWidth = 1.5;
+    }
+
     [0.35, 0.7, 1.0].forEach(fraction => {
       ctx.beginPath();
       for (let i = 0; i < count; i++) {
@@ -2539,29 +2741,45 @@
     // Front net overlay (draws on top of ball as it falls through!)
     renderNetStrands(true);
 
-    // Front Rim Arc
     const rimMidX = (hoop.rimFrontX + hoop.rimBackX) / 2;
     const rimRadiusX = Math.abs(hoop.rimBackX - hoop.rimFrontX) / 2;
 
-    ctx.strokeStyle = '#ea580c';
-    ctx.lineWidth = 4;
+    // Front Rim Arc: Heavy comic ink outline + electric pop orange core
+    ctx.strokeStyle = '#0a0f1d';
+    ctx.lineWidth = 6.2;
     ctx.beginPath();
     ctx.ellipse(rimMidX, hoop.rimY, rimRadiusX, 3.8, 0, 0, Math.PI, false);
     ctx.stroke();
 
-    // Front and Back Rim Solid Point Colliders
-    ctx.fillStyle = '#c2410c';
-    ctx.beginPath();
-    ctx.arc(hoop.rimFrontX, hoop.rimY, hoop.rimRadius, 0, Math.PI * 2);
-    ctx.arc(hoop.rimBackX, hoop.rimY, hoop.rimRadius, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.strokeStyle = '#f97316';
+    ctx.lineWidth = 4.0;
+    ctx.stroke();
 
-    // Front Rim Highlights
-    const highlightOffsetX = State.hoopSide === 'left' ? 1 : -1;
-    ctx.fillStyle = '#fb923c';
+    // Bright yellow comic glint line along the rim top
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(hoop.rimFrontX + highlightOffsetX, hoop.rimY - 1, hoop.rimRadius * 0.5, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.ellipse(rimMidX, hoop.rimY - 0.5, rimRadiusX * 0.85, 2.5, 0, 0.15, Math.PI - 0.15, false);
+    ctx.stroke();
+
+    // Front and Back Rim Solid Point Colliders (Rivets with comic shine)
+    [hoop.rimFrontX, hoop.rimBackX].forEach(rx => {
+      ctx.beginPath();
+      ctx.arc(rx, hoop.rimY, hoop.rimRadius + 1.2, 0, Math.PI * 2);
+      ctx.fillStyle = '#0a0f1d';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(rx, hoop.rimY, hoop.rimRadius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ea580c';
+      ctx.fill();
+
+      // Comic rivet shine dot
+      ctx.beginPath();
+      ctx.arc(rx - 0.8, hoop.rimY - 1, hoop.rimRadius * 0.45, 0, Math.PI * 2);
+      ctx.fillStyle = '#fef08a';
+      ctx.fill();
+    });
 
     ctx.restore();
   }
@@ -2655,23 +2873,32 @@
       prevPx = px;
       prevPy = py;
 
-      const alpha = Math.max(0.18, 1 - (i / totalPoints) * 0.82);
-      const dotRadius = Math.max(2.2, 4.4 - (i / totalPoints) * 2.0);
+      // Comic Pop-Art Trajectory Dots
+      const alpha = Math.max(0.2, 1 - (i / totalPoints) * 0.8);
+      const dotRadius = Math.max(2.5, 4.8 - (i / totalPoints) * 2.2);
 
-      // Trajectory dot glow
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      // Dark comic ink ring
       ctx.beginPath();
       ctx.arc(px, py, dotRadius, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(251, 146, 60, ${alpha})`;
+      ctx.strokeStyle = '#0a0f1d';
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+
+      // Electric pop yellow-orange fill
+      ctx.fillStyle = (i % 3 === 0) ? '#fde047' : '#fb923c';
       ctx.fill();
 
-      // Outer soft ring for leading dots
-      if (i % 2 === 0) {
+      // Energetic white comic glint core for leading dots
+      if (i <= totalPoints * 0.4 && i % 2 === 0) {
         ctx.beginPath();
-        ctx.arc(px, py, dotRadius + 1.5, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        ctx.arc(px - 0.6, py - 0.6, dotRadius * 0.45, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
       }
+      ctx.restore();
     }
 
     ctx.restore();
@@ -2684,11 +2911,43 @@
       if (p.active) {
         const progress = p.life / p.maxLife;
         const alpha = Math.max(0, 1 - progress);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius * (1 - progress * 0.3), 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
+        const rad = p.radius * (1 - progress * 0.35);
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
         ctx.globalAlpha = alpha;
-        ctx.fill();
+
+        // Alternate between comic 4-point starburst glints and comic action dots!
+        if (i % 2 === 0 && rad > 2.5) {
+          // 4-point comic sparkle
+          ctx.beginPath();
+          const s = rad * 1.6;
+          ctx.moveTo(0, -s);
+          ctx.quadraticCurveTo(0, 0, s, 0);
+          ctx.quadraticCurveTo(0, 0, 0, s);
+          ctx.quadraticCurveTo(0, 0, -s, 0);
+          ctx.quadraticCurveTo(0, 0, 0, -s);
+          ctx.closePath();
+
+          ctx.strokeStyle = '#0a0f1d';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+
+          ctx.fillStyle = p.color;
+          ctx.fill();
+        } else {
+          // Comic pop action dot with ink outline
+          ctx.beginPath();
+          ctx.arc(0, 0, rad, 0, Math.PI * 2);
+
+          ctx.strokeStyle = '#0a0f1d';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+
+          ctx.fillStyle = p.color;
+          ctx.fill();
+        }
+        ctx.restore();
       }
     }
     ctx.restore();
