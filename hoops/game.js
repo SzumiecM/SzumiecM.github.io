@@ -352,6 +352,33 @@
       } catch (e) { }
     },
 
+    ballHit(strength = 1) {
+      if (State.isMuted || !audioCtx) return;
+      try {
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(75, now + 0.06);
+
+        const vol = Math.min(0.38, Math.max(0.06, strength * 0.26));
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.onended = () => {
+          try { osc.disconnect(); gain.disconnect(); } catch (e) { }
+        };
+
+        osc.start(now);
+        osc.stop(now + 0.075);
+      } catch (e) { }
+    },
+
     rimClank() {
       if (State.isMuted || !audioCtx) return;
       try {
@@ -651,24 +678,11 @@
   let height = 600;
   let dpr = 1;
 
-  // Ball physics entity
-  const ball = {
-    x: 0,
-    y: 0,
-    vx: 0,
-    vy: 0,
-    radius: 24,
-    angle: 0,
-    angularVelocity: 0,
-    originX: 0,
-    originY: 0,
-    scale: 1,
-    opacity: 1,
-    flightTime: 0,
-    restTime: 0,
-    lastBounceTime: 0,
-    lastClankTime: 0
-  };
+  // Multi-Ball Physics System
+  let ballRadius = 24;
+  let nextBallId = 1;
+  const balls = [];
+  let activeBall = null;
 
   // Hoop entity (Hoop mounted on upper right)
   const hoop = {
@@ -777,7 +791,10 @@
     updateCanvasRect();
 
     // Dynamic Court Measurements
-    ball.radius = Math.max(19, Math.min(26, Math.min(width, height) * 0.040));
+    ballRadius = Math.max(19, Math.min(26, Math.min(width, height) * 0.040));
+    balls.forEach(b => {
+      b.radius = ballRadius;
+    });
 
     // Dynamic Court Bounds:
     // Full court spanning 100% of viewport on both mobile and widescreen
@@ -793,10 +810,10 @@
 
     // Rim dimensions: authentic classic arcade proportion (~2.78x ball radius)
     // Provides healthy clearance for clean swishes on mobile as well as desktop
-    hoop.rimRadius = Math.max(2.8, Math.round(ball.radius * 0.14));
-    const rimWidth = ball.radius * 2.78;
+    hoop.rimRadius = Math.max(2.8, Math.round(ballRadius * 0.14));
+    const rimWidth = ballRadius * 2.78;
     // Spaced inner rim from backboard pane for challenging, authentic bank shots
-    const bracketLen = Math.max(26, Math.round(ball.radius * 1.2));
+    const bracketLen = Math.max(26, Math.round(ballRadius * 1.2));
 
     if (State.hoopSide === 'left') {
       hoop.backboardX = hoopMargin;
@@ -814,13 +831,13 @@
     hoop.backboardTop = hoop.y - boardHeight * 0.65;
     hoop.backboardBottom = hoop.y + boardHeight * 0.35;
     hoop.rimY = hoop.y;
-    hoop.netDepth = ball.radius * 1.85;
+    hoop.netDepth = ballRadius * 1.85;
 
     // Initialize procedural net spring mesh
     initNetMesh();
 
-    // If ball not yet placed or out of bounds, spawn it
-    if (State.phase === 'IDLE' && (ball.x <= 0 || ball.y <= 0 || ball.x > width || ball.y > height)) {
+    // If active ball not yet placed or out of bounds, spawn it
+    if (!activeBall || (activeBall.x <= 0 || activeBall.y <= 0 || activeBall.x > width || activeBall.y > height)) {
       spawnBall(false);
     }
   }
@@ -866,22 +883,64 @@
     }
   }
 
+  function createBall(x, y, animate = true) {
+    return {
+      id: nextBallId++,
+      x: x,
+      y: y,
+      vx: 0,
+      vy: 0,
+      radius: ballRadius,
+      angle: 0,
+      angularVelocity: 0,
+      originX: x,
+      originY: y,
+      scale: animate ? 0.15 : 1,
+      opacity: animate ? 0.15 : 1,
+      isLaunched: false,
+      flightTime: 0,
+      restTime: 0,
+      lastBounceTime: 0,
+      lastClankTime: 0,
+      lastBallHitTime: 0,
+      lifeAfterResolve: 0,
+      shotData: {
+        rimHits: 0,
+        backboardHits: 0,
+        scored: false,
+        isClean: false,
+        enteredFromBelow: false,
+        distanceFeet: 20,
+        zoneName: 'MID-RANGE',
+        zoneColor: '#38bdf8',
+        minY: y,
+        apexFeet: 0,
+        resolved: false
+      }
+    };
+  }
+
   function spawnBall(animate = true) {
-    State.phase = 'SPAWNING';
+    // If activeBall exists and hasn't launched yet, ensure it is visible and ready
+    if (activeBall && !activeBall.isLaunched) {
+      if (!animate) {
+        activeBall.scale = 1;
+        activeBall.opacity = 1;
+      }
+      return activeBall;
+    }
 
     // Generous court spawn bounds ensuring ball NEVER spawns under or behind hoop:
     let minX, maxX;
     if (State.hoopSide === 'left') {
-      // Hoop is on the left: ball spawns strictly in front of the front rim tip (never under or behind!)
-      minX = hoop.rimFrontX + Math.max(75, ball.radius * 3.8);
+      minX = hoop.rimFrontX + Math.max(75, ballRadius * 3.8);
       maxX = width - Math.max(50, width * 0.08);
       if (maxX <= minX + 25) {
         minX = hoop.rimFrontX + 35;
         maxX = width - 25;
       }
     } else {
-      // Hoop is on the right: ball spawns strictly in front of the front rim tip (never under or behind!)
-      maxX = hoop.rimFrontX - Math.max(75, ball.radius * 3.8);
+      maxX = hoop.rimFrontX - Math.max(75, ballRadius * 3.8);
       minX = Math.max(50, width * 0.08);
       if (maxX <= minX + 25) {
         maxX = hoop.rimFrontX - 35;
@@ -893,35 +952,19 @@
     }
 
     // Vertical placement: between 46% and 64% of screen height
-    // Strictly below net bottom by at least 45px, leaving plenty of room below for slingshot pull
     const minY = Math.max(hoop.rimY + hoop.netDepth + 45, height * 0.46);
     const maxY = Math.min(height * 0.64, height - 160);
 
-    ball.originX = minX + Math.random() * (maxX - minX);
-    ball.originY = minY + Math.random() * Math.max(10, maxY - minY);
-    ball.x = ball.originX;
-    ball.y = ball.originY;
-    ball.vx = 0;
-    ball.vy = 0;
-    ball.angularVelocity = 0;
-    ball.angle = 0;
-    ball.flightTime = 0;
-    ball.restTime = 0;
+    const originX = minX + Math.random() * (maxX - minX);
+    const originY = minY + Math.random() * Math.max(10, maxY - minY);
 
-    State.currentShot.rimHits = 0;
-    State.currentShot.backboardHits = 0;
-    State.currentShot.scored = false;
-    State.currentShot.isClean = false;
-    State.currentShot.enteredFromBelow = false;
-    State.currentShot.minY = ball.y;
-    State.currentShot.apexFeet = 0;
+    const newBall = createBall(originX, originY, animate);
 
     // Shot Distance & Zone Classification
     const hoopCenterX = (hoop.rimFrontX + hoop.rimBackX) / 2;
-    const distPx = Math.hypot(ball.originX - hoopCenterX, ball.originY - hoop.rimY);
-    // Authentic basketball scale: ~22px per foot (hoop opening ~52px = 2.4ft)
+    const distPx = Math.hypot(originX - hoopCenterX, originY - hoop.rimY);
     const feet = Math.max(12, Math.round(distPx / 22) + 4);
-    State.currentShot.distanceFeet = feet;
+    newBall.shotData.distanceFeet = feet;
 
     let zoneName = 'MID-RANGE';
     let zoneColor = '#38bdf8';
@@ -935,17 +978,15 @@
       zoneName = '3-POINTER';
       zoneColor = '#10b981';
     }
-    State.currentShot.zoneName = zoneName;
-    State.currentShot.zoneColor = zoneColor;
+    newBall.shotData.zoneName = zoneName;
+    newBall.shotData.zoneColor = zoneColor;
 
-    if (animate) {
-      ball.scale = 0.1;
-      ball.opacity = 0.1;
-    } else {
-      ball.scale = 1;
-      ball.opacity = 1;
-      State.phase = 'IDLE';
-    }
+    State.currentShot = newBall.shotData;
+    activeBall = newBall;
+    balls.push(newBall);
+    State.phase = 'IDLE';
+
+    return newBall;
   }
 
   // ==========================================
@@ -968,7 +1009,9 @@
     initAudio();
     wakeGameLoop();
 
-    if (State.phase !== 'IDLE' && State.phase !== 'AIMING') return;
+    // Player can shoot whenever active ball is available and not yet launched
+    if (!activeBall || activeBall.isLaunched) return;
+    if (State.isAiming) return;
 
     // Close fullscreen menu dropdown if tapping canvas
     if (dom.hudHeader && dom.hudHeader.classList.contains('menu-open')) {
@@ -994,6 +1037,10 @@
     if (e.cancelable) {
       e.preventDefault();
     }
+
+    // Snap activeBall to full scale/opacity immediately if it was scaling in
+    activeBall.scale = 1;
+    activeBall.opacity = 1;
 
     // Grab ANYWHERE on the screen to begin aiming!
     State.isAiming = true;
@@ -1070,23 +1117,30 @@
     State.isAiming = false;
     State.pointerId = null;
 
-    // Use smoothed aim to prevent finger-release liftoff jitter
-    const launch = computeLaunchVelocity(true);
+    if (activeBall && !activeBall.isLaunched) {
+      // Use smoothed aim to prevent finger-release liftoff jitter
+      const launch = computeLaunchVelocity(true);
 
-    // Release must have minimum drag distance to shoot (prevents accidental taps)
-    if (launch.dragDist >= 6 && launch.speed >= V_MIN) {
-      ball.vx = launch.vx;
-      ball.vy = launch.vy;
-      // Natural backspin on basketball launch (rotates opposite to flight direction)
-      ball.angularVelocity = -Math.sign(ball.vx || 1) * 4.5 + (ball.vx * 0.003);
-      State.phase = 'IN_FLIGHT';
-      State.currentShot.minY = ball.y;
-    } else {
-      // Cancelled aim
-      ball.x = ball.originX;
-      ball.y = ball.originY;
-      State.phase = 'IDLE';
+      // Release must have minimum drag distance to shoot (prevents accidental taps)
+      if (launch.dragDist >= 6 && launch.speed >= V_MIN) {
+        activeBall.vx = launch.vx;
+        activeBall.vy = launch.vy;
+        // Natural backspin on basketball launch (rotates opposite to flight direction)
+        activeBall.angularVelocity = -Math.sign(activeBall.vx || 1) * 4.5 + (activeBall.vx * 0.003);
+        activeBall.isLaunched = true;
+        activeBall.shotData.minY = activeBall.y;
+
+        // Disengage activeBall so next ball can spawn almost immediately!
+        activeBall = null;
+        State.spawnCooldown = 0.16; // Snappy 160ms delay (ALMOST instant)
+      } else {
+        // Cancelled aim
+        activeBall.x = activeBall.originX;
+        activeBall.y = activeBall.originY;
+      }
     }
+
+    State.phase = 'IDLE';
     wakeGameLoop();
   }
 
@@ -1100,8 +1154,10 @@
 
       State.isAiming = false;
       State.pointerId = null;
-      ball.x = ball.originX;
-      ball.y = ball.originY;
+      if (activeBall && !activeBall.isLaunched) {
+        activeBall.x = activeBall.originX;
+        activeBall.y = activeBall.originY;
+      }
       State.phase = 'IDLE';
       wakeGameLoop();
     }
@@ -1110,30 +1166,28 @@
   // ==========================================
   // 7. PHYSICS SIMULATION ENGINE
   // ==========================================
-  let resolutionTimer = null;
 
   function updatePhysics(dt) {
-    // Spawn animation
-    if (State.phase === 'SPAWNING') {
-      ball.scale += (1 - ball.scale) * 0.2;
-      ball.opacity += (1 - ball.opacity) * 0.2;
-      if (ball.scale >= 0.98) {
-        ball.scale = 1;
-        ball.opacity = 1;
-        State.phase = 'IDLE';
+    // 1. Spawning countdown for next ball
+    if (!activeBall) {
+      State.spawnCooldown = (State.spawnCooldown || 0) - dt;
+      if (State.spawnCooldown <= 0) {
+        spawnBall(true);
       }
-      return;
     }
 
-    // Aiming state: ball remains anchored
-    if (State.phase === 'AIMING') {
-      ball.x = ball.originX;
-      ball.y = ball.originY;
-      return;
-    }
-
-    if (State.phase !== 'IN_FLIGHT' && State.phase !== 'RESOLVING') {
-      return;
+    // 2. Active ball scaling pop-in animation
+    if (activeBall && !activeBall.isLaunched) {
+      if (activeBall.scale < 1) {
+        activeBall.scale += (1 - activeBall.scale) * 0.35;
+        activeBall.opacity += (1 - activeBall.opacity) * 0.35;
+        if (activeBall.scale >= 0.98) {
+          activeBall.scale = 1;
+          activeBall.opacity = 1;
+        }
+      }
+      activeBall.x = activeBall.originX;
+      activeBall.y = activeBall.originY;
     }
 
     // Sub-stepping integration: adaptive fixed-duration sub-steps (~3ms per step)
@@ -1144,161 +1198,294 @@
     const floorY = height - 12;
 
     for (let step = 0; step < steps; step++) {
-      const prevX = ball.x;
-      const prevY = ball.y;
-
-      // Newtonian kinematics integration (ZERO horizontal drag -> 1:1 match with trajectory)
-      ball.vy += GRAVITY * subDt;
-      ball.x += ball.vx * subDt;
-      ball.y += ball.vy * subDt;
-      if (ball.y < State.currentShot.minY) {
-        State.currentShot.minY = ball.y;
-      }
-      ball.angle += ball.angularVelocity * subDt;
-      // Gentle midair rotational damping
-      ball.angularVelocity *= (1 - 0.12 * subDt);
-
-      // Spin decay when ball is resting or nearly stationary on court surfaces
-      if (Math.hypot(ball.vx, ball.vy) < 25 && (ball.y >= floorY - ball.radius - 5 || Math.abs(ball.y - hoop.rimY) < ball.radius * 2)) {
-        ball.angularVelocity *= (1 - 10.0 * subDt);
-      }
-
-      // When ball drops inside the net (between rimY and rimY + netDepth),
-      // apply gentle net funneling & nylon drag so it swishes fluidly without snagging
-      if (State.currentShot.scored && ball.y >= hoop.rimY && ball.y <= hoop.rimY + hoop.netDepth) {
-        ball.vx *= (1 - 0.45 * subDt);
-        ball.vy *= (1 - 0.12 * subDt);
-      }
-
-      // Trailing embers for Fire Ball skin
-      if (State.equippedSkin === 'fire' && Math.hypot(ball.vx, ball.vy) > 220) {
-        if (Math.random() < 0.3) {
-          spawnParticle(
-            ball.x + (Math.random() * 10 - 5),
-            ball.y + (Math.random() * 10 - 5),
-            (Math.random() - 0.5) * 50 - ball.vx * 0.1,
-            (Math.random() - 0.5) * 50 - ball.vy * 0.1,
-            Math.random() * 3 + 2,
-            Math.random() > 0.4 ? '#f59e0b' : '#ef4444',
-            0.45
-          );
+      // Step A: Newtonian Kinematics & Court Collisions for each launched ball
+      for (let i = 0; i < balls.length; i++) {
+        const b = balls[i];
+        if (!b.isLaunched) {
+          b.x = b.originX;
+          b.y = b.originY;
+          continue;
         }
-      }
 
-      // ------------------------------------------
-      // Collision: Hoop Rim (Authentic 2.5D outer edge tips)
-      // ------------------------------------------
-      checkRimCollisions(subDt);
+        const prevX = b.x;
+        const prevY = b.y;
 
-      // ------------------------------------------
-      // Collision: Backboard (Physical oriented face plane & corner pegs)
-      // ------------------------------------------
-      checkBackboardCollision();
+        // Newtonian kinematics integration (ZERO horizontal drag -> 1:1 match with trajectory)
+        b.vy += GRAVITY * subDt;
+        b.x += b.vx * subDt;
+        b.y += b.vy * subDt;
+        if (b.y < b.shotData.minY) {
+          b.shotData.minY = b.y;
+        }
+        b.angle += b.angularVelocity * subDt;
+        // Gentle midair rotational damping
+        b.angularVelocity *= (1 - 0.12 * subDt);
 
-      // Track if ball passes upwards through the rim cylinder from below (illegal shot)
-      const minHoopX = Math.min(hoop.rimFrontX, hoop.rimBackX);
-      const maxHoopX = Math.max(hoop.rimFrontX, hoop.rimBackX);
-      if (prevY >= hoop.rimY && ball.y <= hoop.rimY && ball.x >= minHoopX && ball.x <= maxHoopX && ball.vy < 0) {
-        State.currentShot.enteredFromBelow = true;
-      }
+        // Spin decay when ball is resting or nearly stationary on court surfaces
+        if (Math.hypot(b.vx, b.vy) < 25 && (b.y >= floorY - b.radius - 5 || Math.abs(b.y - hoop.rimY) < b.radius * 2)) {
+          b.angularVelocity *= (1 - 10.0 * subDt);
+        }
 
-      // ------------------------------------------
-      // Score Trigger Sensor
-      // ------------------------------------------
-      checkScoreTrigger(prevY, ball.y, prevX, ball.x);
+        // When ball drops inside the net (between rimY and rimY + netDepth),
+        // apply gentle net funneling & nylon drag so it swishes fluidly without snagging
+        if (b.shotData.scored && b.y >= hoop.rimY && b.y <= hoop.rimY + hoop.netDepth) {
+          b.vx *= (1 - 0.45 * subDt);
+          b.vy *= (1 - 0.12 * subDt);
+        }
 
-      // ------------------------------------------
-      // Wall & Floor Collisions
-      // ------------------------------------------
-      // Floor
-      if (ball.y + ball.radius >= floorY) {
-        ball.y = floorY - ball.radius;
-        if (ball.vy > 0) {
-          const impact = Math.abs(ball.vy) / 600;
-          if (ball.vy > 35) {
-            ball.vy = -ball.vy * RESTITUTION_FLOOR;
-          } else {
-            ball.vy = 0;
-          }
-          ball.angularVelocity *= 0.75;
-          ball.vx *= 0.85;
-
-          if (performance.now() - ball.lastBounceTime > 90 && impact > 0.08) {
-            Sound.bounce(impact);
-            ball.lastBounceTime = performance.now();
-          }
-
-          // If ball touched the floor without scoring, shot is officially missed
-          if (!State.currentShot.scored && State.phase === 'IN_FLIGHT') {
-            resolveShot(false);
+        // Trailing embers for Fire Ball skin
+        if (State.equippedSkin === 'fire' && Math.hypot(b.vx, b.vy) > 220) {
+          if (Math.random() < 0.3) {
+            spawnParticle(
+              b.x + (Math.random() * 10 - 5),
+              b.y + (Math.random() * 10 - 5),
+              (Math.random() - 0.5) * 50 - b.vx * 0.1,
+              (Math.random() - 0.5) * 50 - b.vy * 0.1,
+              Math.random() * 3 + 2,
+              Math.random() > 0.4 ? '#f59e0b' : '#ef4444',
+              0.45
+            );
           }
         }
-      }
 
-      // Left Wall (on-court only, allows launching high into sky)
-      if (ball.x - ball.radius <= 0 && ball.y > 0) {
-        ball.x = ball.radius;
-        if (ball.vx < 0) {
-          ball.vx = -ball.vx * 0.5;
+        // Collision: Hoop Rim
+        checkRimCollisions(b, subDt);
+
+        // Collision: Backboard
+        checkBackboardCollision(b);
+
+        // Track if ball passes upwards through the rim cylinder from below (illegal shot)
+        const minHoopX = Math.min(hoop.rimFrontX, hoop.rimBackX);
+        const maxHoopX = Math.max(hoop.rimFrontX, hoop.rimBackX);
+        if (prevY >= hoop.rimY && b.y <= hoop.rimY && b.x >= minHoopX && b.x <= maxHoopX && b.vy < 0) {
+          b.shotData.enteredFromBelow = true;
+        }
+
+        // Score Trigger Sensor
+        checkScoreTrigger(b, prevY, b.y, prevX, b.x);
+
+        // Wall & Floor Collisions
+        if (b.y + b.radius >= floorY) {
+          b.y = floorY - b.radius;
+          if (b.vy > 0) {
+            const impact = Math.abs(b.vy) / 600;
+            if (b.vy > 35) {
+              b.vy = -b.vy * RESTITUTION_FLOOR;
+            } else {
+              b.vy = 0;
+            }
+            b.angularVelocity *= 0.75;
+            b.vx *= 0.85;
+
+            const now = performance.now();
+            if (now - (b.lastBounceTime || 0) > 90 && impact > 0.08) {
+              Sound.bounce(impact);
+              b.lastBounceTime = now;
+            }
+
+            // If ball touched the floor without scoring, shot is officially missed
+            if (!b.shotData.scored && !b.shotData.resolved) {
+              handleShotMiss(b);
+            }
+          }
+        }
+
+        // Left Wall
+        if (b.x - b.radius <= 0 && b.y > 0) {
+          b.x = b.radius;
+          if (b.vx < 0) b.vx = -b.vx * 0.5;
+        }
+        // Right Gym Wall
+        if (b.x + b.radius >= width && b.y > 0) {
+          b.x = width - b.radius;
+          if (b.vx > 0) b.vx = -b.vx * 0.5;
+        }
+        // Extreme ceiling safety
+        if (b.y < -15000) {
+          b.y = -15000;
+          b.vy = 100;
+        }
+
+        const curSpeed = Math.hypot(b.vx, b.vy);
+        if (curSpeed > 3500) {
+          const ratio = 3500 / curSpeed;
+          b.vx *= ratio;
+          b.vy *= ratio;
+        }
+        if (Math.abs(b.angularVelocity) > 30) {
+          b.angularVelocity = Math.sign(b.angularVelocity) * 30;
         }
       }
-      // Right Gym Wall behind backboard (on-court only)
-      if (ball.x + ball.radius >= width && ball.y > 0) {
-        ball.x = width - ball.radius;
-        if (ball.vx > 0) {
-          ball.vx = -ball.vx * 0.5;
-        }
-      }
-      // Extreme ceiling safety to prevent runaway numeric overflow
-      if (ball.y < -15000) {
-        ball.y = -15000;
-        ball.vy = 100;
-      }
 
-      // Safety clamps on velocity & spin to completely prevent runaway glitches
-      const curSpeed = Math.hypot(ball.vx, ball.vy);
-      if (curSpeed > 3500) {
-        const ratio = 3500 / curSpeed;
-        ball.vx *= ratio;
-        ball.vy *= ratio;
-      }
-      if (Math.abs(ball.angularVelocity) > 30) {
-        ball.angularVelocity = Math.sign(ball.angularVelocity) * 30;
+      // Step B: Ball-to-Ball Elastic Circle Collision Pass
+      for (let i = 0; i < balls.length; i++) {
+        const b1 = balls[i];
+        for (let j = i + 1; j < balls.length; j++) {
+          const b2 = balls[j];
+          checkBallBallCollision(b1, b2, subDt);
+        }
       }
     }
 
-    // Auto-resolve if ball is resting or out of playable frame
-    if (State.phase === 'IN_FLIGHT') {
-      const ballSpeed = Math.hypot(ball.vx, ball.vy);
+    // Step C: Ball Lifecycle, Timeout & Cleanup
+    for (let i = balls.length - 1; i >= 0; i--) {
+      const b = balls[i];
+      if (b === activeBall && !b.isLaunched) continue;
 
-      // Track total flight duration of this shot
-      ball.flightTime = (ball.flightTime || 0) + dt;
+      const ballSpeed = Math.hypot(b.vx, b.vy);
+      b.flightTime = (b.flightTime || 0) + dt;
 
-      // Track if ball is virtually stationary anywhere
       if (ballSpeed < 25) {
-        ball.restTime = (ball.restTime || 0) + dt;
+        b.restTime = (b.restTime || 0) + dt;
       } else {
-        ball.restTime = 0;
+        b.restTime = 0;
       }
 
-      // Ball is resting on floor, or stationary/stuck anywhere for > 0.85s, or shot exceeded 5.5s timeout
-      if ((ballSpeed < 25 && ball.y >= floorY - ball.radius - 2) || ball.restTime > 0.85 || ball.flightTime > 5.5) {
-        if (!State.currentShot.scored) {
-          resolveShot(false);
+      // Unresolved shot resting or timeout check
+      if (!b.shotData.resolved) {
+        if ((ballSpeed < 25 && b.y >= floorY - b.radius - 2) || b.restTime > 0.85 || b.flightTime > 5.5) {
+          if (!b.shotData.scored) {
+            handleShotMiss(b);
+          }
+        } else if (b.y > height + 80 || b.x < -250 || b.x > width + 300) {
+          if (!b.shotData.scored) {
+            handleShotMiss(b);
+          }
         }
-      } else if (ball.y > height + 80 || ball.x < -250 || ball.x > width + 300) {
-        if (!State.currentShot.scored) {
-          resolveShot(false);
+      }
+
+      // Once resolved, handle smooth fade-out and removal
+      if (b.shotData.resolved) {
+        b.lifeAfterResolve = (b.lifeAfterResolve || 0) + dt;
+        const isResting = ballSpeed < 35 && b.y >= floorY - b.radius - 5;
+        const isCrowded = balls.length > 7;
+        if (b.lifeAfterResolve > (isCrowded ? 0.6 : 1.2) || isResting || b.y > height + 60 || b.x < -200 || b.x > width + 250) {
+          b.opacity -= dt * (isCrowded ? 2.5 : 1.6);
+          if (b.opacity <= 0) {
+            balls.splice(i, 1);
+          }
         }
       }
     }
   }
 
-  function triggerRimHitSound(x, y) {
+  // Realistic elastic circle-circle collision between two balls
+  function checkBallBallCollision(b1, b2, subDt) {
+    if (b1.opacity < 0.2 || b2.opacity < 0.2 || b1.scale < 0.5 || b2.scale < 0.5) return;
+
+    const dx = b2.x - b1.x;
+    const dy = b2.y - b1.y;
+    const distSq = dx * dx + dy * dy;
+    const r1 = b1.radius * b1.scale;
+    const r2 = b2.radius * b2.scale;
+    const minDist = r1 + r2;
+
+    if (distSq < minDist * minDist && distSq > 0.0001) {
+      const dist = Math.sqrt(distSq);
+      const nx = dx / dist;
+      const ny = dy / dist;
+      const overlap = minDist - dist;
+
+      const b1Movable = b1.isLaunched;
+      const b2Movable = b2.isLaunched;
+
+      // Position separation to prevent overlap/penetration
+      if (b1Movable && b2Movable) {
+        b1.x -= nx * overlap * 0.5;
+        b1.y -= ny * overlap * 0.5;
+        b2.x += nx * overlap * 0.5;
+        b2.y += ny * overlap * 0.5;
+      } else if (b1Movable && !b2Movable) {
+        // b2 is anchored at spawn/aim, displace flying b1
+        b1.x -= nx * overlap;
+        b1.y -= ny * overlap;
+      } else if (!b1Movable && b2Movable) {
+        // b1 is anchored at spawn/aim, displace flying b2
+        b2.x += nx * overlap;
+        b2.y += ny * overlap;
+      } else {
+        return;
+      }
+
+      // Velocities along collision normal
+      const v1x = b1Movable ? b1.vx : 0;
+      const v1y = b1Movable ? b1.vy : 0;
+      const v2x = b2Movable ? b2.vx : 0;
+      const v2y = b2Movable ? b2.vy : 0;
+
+      const rvx = v1x - v2x;
+      const rvy = v1y - v2y;
+      const vn = rvx * nx + rvy * ny;
+
+      // vn > 0 means moving toward each other along normal
+      if (vn > 0) {
+        const RESTITUTION_BALL = 0.83; // Real basketball-on-basketball bounce elasticity
+        const impulse = (1 + RESTITUTION_BALL) * vn * 0.5;
+
+        if (b1Movable && b2Movable) {
+          b1.vx -= impulse * nx;
+          b1.vy -= impulse * ny;
+          b2.vx += impulse * nx;
+          b2.vy += impulse * ny;
+        } else if (b1Movable && !b2Movable) {
+          b1.vx -= impulse * 2 * nx;
+          b1.vy -= impulse * 2 * ny;
+        } else if (!b1Movable && b2Movable) {
+          b2.vx += impulse * 2 * nx;
+          b2.vy += impulse * 2 * ny;
+        }
+
+        // Tangential friction and rotational spin exchange
+        const tx = -ny;
+        const ty = nx;
+        const w1r = b1Movable ? b1.angularVelocity * b1.radius : 0;
+        const w2r = b2Movable ? b2.angularVelocity * b2.radius : 0;
+        const vt = rvx * tx + rvy * ty + (w1r + w2r);
+        const frictionImpulse = Math.min(Math.abs(vt) * 0.16, impulse * 0.28) * Math.sign(vt);
+
+        if (b1Movable) {
+          b1.vx -= frictionImpulse * 0.5 * tx;
+          b1.vy -= frictionImpulse * 0.5 * ty;
+          b1.angularVelocity -= (frictionImpulse * 0.5) / b1.radius;
+        }
+        if (b2Movable) {
+          b2.vx += frictionImpulse * 0.5 * tx;
+          b2.vy += frictionImpulse * 0.5 * ty;
+          b2.angularVelocity -= (frictionImpulse * 0.5) / b2.radius;
+        }
+
+        // Audio and particle sparks
+        const now = performance.now();
+        if (now - (b1.lastBallHitTime || 0) > 65 && now - (b2.lastBallHitTime || 0) > 65) {
+          b1.lastBallHitTime = now;
+          b2.lastBallHitTime = now;
+          const impact = Math.abs(vn);
+          if (impact > 35) {
+            Sound.ballHit(Math.min(1.4, impact / 420));
+            const contactX = b1.x + nx * r1;
+            const contactY = b1.y + ny * r1;
+            for (let k = 0; k < 3; k++) {
+              spawnParticle(
+                contactX,
+                contactY,
+                (Math.random() - 0.5) * 70,
+                (Math.random() - 0.5) * 70,
+                2.2,
+                '#f97316',
+                0.22
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function triggerRimHitSound(b, x, y) {
     const now = performance.now();
-    if (now - ball.lastClankTime > 115) {
+    if (now - (b.lastClankTime || 0) > 115) {
       Sound.rimClank();
-      ball.lastClankTime = now;
+      b.lastClankTime = now;
       for (let k = 0; k < 2; k++) {
         spawnParticle(
           x,
@@ -1313,55 +1500,55 @@
     }
   }
 
-  function collideWithPeg(px, py, isBackRim = false) {
-    const dx = ball.x - px;
-    const dy = ball.y - py;
+  function collideWithPeg(b, px, py, isBackRim = false) {
+    const dx = b.x - px;
+    const dy = b.y - py;
     const dist = Math.hypot(dx, dy);
-    const minDist = ball.radius + hoop.rimRadius;
+    const minDist = b.radius + hoop.rimRadius;
 
     if (dist < minDist && dist > 0.0001) {
       const nx = dx / dist;
       const ny = dy / dist;
-      const vn = ball.vx * nx + ball.vy * ny;
+      const vn = b.vx * nx + b.vy * ny;
 
       // Full penetration resolution (prevents sinking or sticking)
       const penetration = minDist - dist;
-      ball.x += nx * penetration;
-      ball.y += ny * penetration;
+      b.x += nx * penetration;
+      b.y += ny * penetration;
 
       const minRimX = Math.min(hoop.rimFrontX, hoop.rimBackX);
       const maxRimX = Math.max(hoop.rimFrontX, hoop.rimBackX);
       // If ball is descending cleanly into the hoop opening, funnel it down without upward kickback
-      const isEnteringOpening = ball.vy > 0 && ball.y >= hoop.rimY - 6 && ball.x > minRimX + 3 && ball.x < maxRimX - 3;
+      const isEnteringOpening = b.vy > 0 && b.y >= hoop.rimY - 6 && b.x > minRimX + 3 && b.x < maxRimX - 3;
 
       if (vn < 0) {
         if (isEnteringOpening) {
           // Ball is plunging downward into the hoop cylinder: guide inward without upward stopping kickback
-          ball.vx -= (1 + RESTITUTION_RIM * 0.4) * vn * nx;
-          if (ball.vy < 35) ball.vy = 35;
+          b.vx -= (1 + RESTITUTION_RIM * 0.4) * vn * nx;
+          if (b.vy < 35) b.vy = 35;
         } else if (vn < -15) {
           // Elastic reflection for genuine impacts
-          ball.vx -= (1 + RESTITUTION_RIM) * vn * nx;
-          ball.vy -= (1 + RESTITUTION_RIM) * vn * ny;
-          State.currentShot.rimHits++;
-          triggerRimHitSound(px, py);
+          b.vx -= (1 + RESTITUTION_RIM) * vn * nx;
+          b.vy -= (1 + RESTITUTION_RIM) * vn * ny;
+          b.shotData.rimHits++;
+          triggerRimHitSound(b, px, py);
         } else {
           // Resting contact: cancel normal velocity to prevent sinking under gravity
-          ball.vx -= vn * nx;
-          ball.vy -= vn * ny;
+          b.vx -= vn * nx;
+          b.vy -= vn * ny;
         }
 
         // Tangential friction during contact
         const tx = -ny;
         const ty = nx;
-        const vt = ball.vx * tx + ball.vy * ty;
-        const surfaceSpeed = ball.angularVelocity * ball.radius;
+        const vt = b.vx * tx + b.vy * ty;
+        const surfaceSpeed = b.angularVelocity * b.radius;
         const slip = vt - surfaceSpeed;
         const frictionImpulse = Math.min(Math.abs(slip) * 0.15, Math.abs(vn) * 0.12) * Math.sign(slip);
 
-        ball.vx -= frictionImpulse * tx;
-        ball.vy -= frictionImpulse * ty;
-        ball.angularVelocity += (frictionImpulse * 0.35) / ball.radius;
+        b.vx -= frictionImpulse * tx;
+        b.vy -= frictionImpulse * ty;
+        b.angularVelocity += (frictionImpulse * 0.35) / b.radius;
 
         return true;
       }
@@ -1369,11 +1556,11 @@
     return false;
   }
 
-  function checkRimCollisions(subDt) {
+  function checkRimCollisions(b, subDt) {
     // If ball scored and traveling downward in net, bypass rim colliders
-    if (State.currentShot.scored && ball.y >= hoop.rimY) return;
+    if (b.shotData.scored && b.y >= hoop.rimY) return;
 
-    const r = ball.radius;
+    const r = b.radius;
     const courtDir = State.hoopSide === 'left' ? 1 : -1;
 
     // Bracket collar connecting back rim to backboard:
@@ -1381,59 +1568,59 @@
     const bracketMinX = Math.min(hoop.backboardX, hoop.rimBackX);
     const bracketMaxX = Math.max(hoop.backboardX, hoop.rimBackX);
 
-    if (ball.x >= bracketMinX - 2 && ball.x <= bracketMaxX + 2) {
-      if (ball.y + r >= hoop.rimY - 4 && ball.y - r <= hoop.rimY + 4) {
-        if (ball.y < hoop.rimY) {
+    if (b.x >= bracketMinX - 2 && b.x <= bracketMaxX + 2) {
+      if (b.y + r >= hoop.rimY - 4 && b.y - r <= hoop.rimY + 4) {
+        if (b.y < hoop.rimY) {
           // Top of bracket: smoothly guide forward towards hoop so it doesn't wedge in the corner
-          ball.y = hoop.rimY - 4 - r;
-          ball.vx += courtDir * (280 * (subDt || 0.003));
-          if (ball.vy > 0) {
-            ball.vy = -ball.vy * 0.4;
+          b.y = hoop.rimY - 4 - r;
+          b.vx += courtDir * (280 * (subDt || 0.003));
+          if (b.vy > 0) {
+            b.vy = -b.vy * 0.4;
           }
-          if (ball.vy < -25) {
-            State.currentShot.rimHits++;
-            triggerRimHitSound(ball.x, hoop.rimY);
+          if (b.vy < -25) {
+            b.shotData.rimHits++;
+            triggerRimHitSound(b, b.x, hoop.rimY);
           }
-        } else if (ball.vy < 0 && ball.y > hoop.rimY) {
+        } else if (b.vy < 0 && b.y > hoop.rimY) {
           // Underside of bracket: bounce downward
-          ball.y = hoop.rimY + 4 + r;
-          ball.vy = -ball.vy * RESTITUTION_RIM;
+          b.y = hoop.rimY + 4 + r;
+          b.vy = -b.vy * RESTITUTION_RIM;
           return;
         }
       }
     }
 
     // Front Rim Peg (outer court-facing peg, full circle)
-    collideWithPeg(hoop.rimFrontX, hoop.rimY, false);
+    collideWithPeg(b, hoop.rimFrontX, hoop.rimY, false);
 
     // Back Rim Peg (inner court-facing peg, full circle)
-    collideWithPeg(hoop.rimBackX, hoop.rimY, true);
+    collideWithPeg(b, hoop.rimBackX, hoop.rimY, true);
   }
 
-  function checkBackboardCollision() {
+  function checkBackboardCollision(b) {
     const courtDir = State.hoopSide === 'left' ? 1 : -1;
     const faceX = hoop.backboardX + courtDir * 4.5;
     const topY = hoop.backboardTop;
     const bottomY = hoop.backboardBottom;
-    const r = ball.radius;
+    const r = b.radius;
 
     // 1. Front face collision (vertical board segment between topY and bottomY)
-    if (ball.y >= topY && ball.y <= bottomY) {
-      const distToFace = (ball.x - faceX) * courtDir;
+    if (b.y >= topY && b.y <= bottomY) {
+      const distToFace = (b.x - faceX) * courtDir;
       if (distToFace < r && distToFace > -r * 1.5) {
-        ball.x = faceX + courtDir * r;
-        const vn = ball.vx * courtDir;
+        b.x = faceX + courtDir * r;
+        const vn = b.vx * courtDir;
         if (vn < -4) {
-          ball.vx = -vn * RESTITUTION_BOARD * courtDir;
-          ball.vy *= 0.92;
-          ball.angularVelocity *= 0.8;
+          b.vx = -vn * RESTITUTION_BOARD * courtDir;
+          b.vy *= 0.92;
+          b.angularVelocity *= 0.8;
           const MAX_ANGULAR_VEL = 22;
-          ball.angularVelocity = Math.max(-MAX_ANGULAR_VEL, Math.min(MAX_ANGULAR_VEL, ball.angularVelocity));
+          b.angularVelocity = Math.max(-MAX_ANGULAR_VEL, Math.min(MAX_ANGULAR_VEL, b.angularVelocity));
 
-          State.currentShot.backboardHits++;
-          if (performance.now() - ball.lastClankTime > 85) {
+          b.shotData.backboardHits++;
+          if (performance.now() - (b.lastClankTime || 0) > 85) {
             Sound.rimClank();
-            ball.lastClankTime = performance.now();
+            b.lastClankTime = performance.now();
           }
         }
         return;
@@ -1441,37 +1628,38 @@
     }
 
     // 2. Corner peg collisions (rounded corner tips at backboard top and bottom edges)
-    collideWithPeg(faceX, topY, false);
-    collideWithPeg(faceX, bottomY, false);
+    collideWithPeg(b, faceX, topY, false);
+    collideWithPeg(b, faceX, bottomY, false);
   }
 
-  function checkScoreTrigger(prevY, currY, prevX, currX) {
-    if (State.currentShot.scored) return;
-    if (State.currentShot.enteredFromBelow) return;
+  function checkScoreTrigger(b, prevY, currY, prevX, currX) {
+    if (b.shotData.scored) return;
+    if (b.shotData.enteredFromBelow) return;
 
     // Rim opening sensor: ball cleanly crosses the horizontal rim plane inside the opening
     const minRimX = Math.min(hoop.rimFrontX, hoop.rimBackX);
     const maxRimX = Math.max(hoop.rimFrontX, hoop.rimBackX);
 
-    const sensorMargin = ball.radius * 0.28;
+    const sensorMargin = b.radius * 0.28;
     const sensorLeft = minRimX + sensorMargin;
     const sensorRight = maxRimX - sensorMargin;
 
     // Downward descent strictly crossing through the rim plane
-    if (prevY <= hoop.rimY && currY >= hoop.rimY && ball.vy > 0) {
-      if (ball.x >= sensorLeft && ball.x <= sensorRight) {
-        State.currentShot.scored = true;
-        handleScoreSuccess();
+    if (prevY <= hoop.rimY && currY >= hoop.rimY && b.vy > 0) {
+      if (b.x >= sensorLeft && b.x <= sensorRight) {
+        b.shotData.scored = true;
+        handleScoreSuccess(b);
       }
     }
   }
 
-  function handleScoreSuccess() {
+  function handleScoreSuccess(b) {
+    const shot = b.shotData;
     // Clean shot: pure swish that never touched the rim or backboard
-    const isClean = State.currentShot.rimHits === 0 && State.currentShot.backboardHits === 0;
-    const isBank = State.currentShot.backboardHits > 0;
-    const isRattle = State.currentShot.rimHits >= 2;
-    State.currentShot.isClean = isClean;
+    const isClean = shot.rimHits === 0 && shot.backboardHits === 0;
+    const isBank = shot.backboardHits > 0;
+    const isRattle = shot.rimHits >= 2;
+    shot.isClean = isClean;
 
     State.streak++;
     if (State.streak > State.bestStreak) {
@@ -1486,22 +1674,22 @@
     if (isBank) {
       State.lifetimeBankShots = (State.lifetimeBankShots || 0) + 1;
     }
-    const distFeet = State.currentShot.distanceFeet || 20;
+    const distFeet = shot.distanceFeet || 20;
     if (distFeet > (State.longestShot || 0)) {
       State.longestShot = distFeet;
     }
 
     // Apex Height calculation: strictly scarce — only shots that actively went outside the top of the screen
-    const isOffscreen = State.currentShot.minY < -ball.radius;
+    const isOffscreen = shot.minY < -b.radius;
     let apexFeet = 0;
     if (isOffscreen) {
-      apexFeet = getBallAltitudeFeet(State.currentShot.minY);
-      State.currentShot.apexFeet = apexFeet;
+      apexFeet = getBallAltitudeFeet(shot.minY);
+      shot.apexFeet = apexFeet;
       if (apexFeet > (State.maxHeight || 0)) {
         State.maxHeight = apexFeet;
       }
     } else {
-      State.currentShot.apexFeet = 0;
+      shot.apexFeet = 0;
     }
 
     // ==========================================
@@ -1706,38 +1894,32 @@
       unlockAchievement('downtown_sniper');
     }
 
-    // Smoothly schedule next ball spawn after score
-    resolveShot(true);
+    b.shotData.resolved = true;
+    b.lifeAfterResolve = 0;
+    scheduleStorageFlush();
   }
 
-  function resolveShot(isScored) {
-    if (State.phase === 'RESOLVING') return;
-    State.phase = 'RESOLVING';
+  function handleShotMiss(b) {
+    if (b.shotData.resolved) return;
+    b.shotData.resolved = true;
+    b.lifeAfterResolve = 0;
 
-    if (!isScored) {
-      // Miss: Run ends, streak and current score reset!
-      if (State.score > 0) {
-        const finalScore = State.score;
-        if (finalScore >= State.highScore && State.highScore > 0) {
-          addFloatingText(`RUN OVER: ${finalScore.toLocaleString()} (NEW BEST!)`, ball.x, ball.y - 24, '#fbbf24', 23);
-        } else {
-          addFloatingText(`RUN OVER: ${finalScore.toLocaleString()} PTS`, ball.x, ball.y - 24, '#ef4444', 21);
-        }
-      } else if (State.streak > 0) {
-        addFloatingText('STREAK LOST', ball.x, ball.y - 20, '#ef4444', 20);
+    // Miss: Run ends, streak and current score reset!
+    if (State.score > 0) {
+      const finalScore = State.score;
+      if (finalScore >= State.highScore && State.highScore > 0) {
+        addFloatingText(`RUN OVER: ${finalScore.toLocaleString()} (NEW BEST!)`, b.x, b.y - 24, '#fbbf24', 23);
+      } else {
+        addFloatingText(`RUN OVER: ${finalScore.toLocaleString()} PTS`, b.x, b.y - 24, '#ef4444', 21);
       }
-      State.score = 0;
-      State.streak = 0;
-      State.announcedHighScore = false;
-      updateHUD();
+    } else if (State.streak > 0) {
+      addFloatingText('STREAK LOST', b.x, b.y - 20, '#ef4444', 20);
     }
-
+    State.score = 0;
+    State.streak = 0;
+    State.announcedHighScore = false;
+    updateHUD();
     scheduleStorageFlush();
-
-    if (resolutionTimer) clearTimeout(resolutionTimer);
-    resolutionTimer = setTimeout(() => {
-      spawnBall(true);
-    }, isScored ? 750 : 850);
   }
 
   // Net Spring simulation & Damping
@@ -2014,112 +2196,121 @@
       renderPredictiveTrajectory();
     }
 
-    // 4. Ball Entity (with 2.5D layering)
-    if (ball.scale > 0.01 && ball.opacity > 0.01) {
+    // 4. Ball Entities (with 2.5D layering)
+    for (let i = 0; i < balls.length; i++) {
+      const b = balls[i];
+      if (b.scale <= 0.01 || b.opacity <= 0.01) continue;
+
       ctx.save();
-      ctx.globalAlpha = ball.opacity;
-      const renderRadius = ball.radius * ball.scale;
+      ctx.globalAlpha = b.opacity;
+      const renderRadius = b.radius * b.scale;
 
       // Soft ground contact shadow when resting or near floor
-      if (ball.y > height * 0.5) {
+      if (b.y > height * 0.45) {
         const groundY = height - 12;
-        const distToGround = Math.max(0, groundY - ball.y);
+        const distToGround = Math.max(0, groundY - b.y);
         const shadowScale = Math.max(0.2, 1 - distToGround / 350);
-        const shadowAlpha = Math.min(0.4, 0.4 * shadowScale);
+        const shadowAlpha = Math.min(0.35, 0.35 * shadowScale);
 
         ctx.beginPath();
-        ctx.ellipse(ball.x, groundY, renderRadius * shadowScale * 1.2, 5 * shadowScale, 0, 0, Math.PI * 2);
+        ctx.ellipse(b.x, groundY, renderRadius * shadowScale * 1.2, 5 * shadowScale, 0, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
         ctx.fill();
       }
 
-      renderBallSkin(ctx, ball.x, ball.y, renderRadius, ball.angle, State.equippedSkin);
-
-      // Shot Zone & Distance Badge floating above the ball when aiming or idle
-      if ((State.phase === 'IDLE' || State.phase === 'AIMING') && State.currentShot.distanceFeet) {
-        const badgeY = ball.originY - renderRadius - 20;
-        const badgeText = `${State.currentShot.zoneName} • ${State.currentShot.distanceFeet} FT`;
-        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
-        const textWidth = ctx.measureText(badgeText).width;
-        const padX = 8;
-        const bWidth = textWidth + padX * 2;
-        const bHeight = 19;
-        const bX = ball.originX - bWidth / 2;
-        const bY = badgeY - bHeight / 2;
-
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-        ctx.beginPath();
-        if (typeof ctx.roundRect === 'function') {
-          ctx.roundRect(bX, bY, bWidth, bHeight, 9);
-        } else {
-          ctx.rect(bX, bY, bWidth, bHeight);
-        }
-        ctx.fill();
-
-        ctx.strokeStyle = State.currentShot.zoneColor || '#38bdf8';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-
-        ctx.fillStyle = State.currentShot.zoneColor || '#38bdf8';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(badgeText, ball.originX, badgeY);
-      }
-
+      renderBallSkin(ctx, b.x, b.y, renderRadius, b.angle, State.equippedSkin);
       ctx.restore();
     }
 
-    // 4b. Space Altitude Indicator: when ball is launched high into space above canvas
-    if (ball.y < -ball.radius && State.phase === 'IN_FLIGHT') {
+    // 4a. Shot Zone & Distance Badge floating above active ball when aiming or idle
+    if (activeBall && !activeBall.isLaunched && activeBall.shotData.distanceFeet && activeBall.scale >= 0.5) {
       ctx.save();
-      const indicatorX = Math.max(24, Math.min(width - 24, ball.x));
-      const heightFt = getBallAltitudeFeet(ball.y);
-      const altText = `${heightFt} FT`;
-
-      // Triangle pointer downwards
-      ctx.fillStyle = '#ea580c';
-      ctx.beginPath();
-      ctx.moveTo(indicatorX - 9, 8);
-      ctx.lineTo(indicatorX + 9, 8);
-      ctx.lineTo(indicatorX, 19);
-      ctx.closePath();
-      ctx.fill();
-
-      // Pulsing miniature ball indicator
-      ctx.beginPath();
-      ctx.arc(indicatorX, 29, 7.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#f97316';
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Altitude text badge in FT (consistent with FT popups & stats)
+      ctx.globalAlpha = activeBall.opacity;
+      const renderRadius = activeBall.radius * activeBall.scale;
+      const badgeY = activeBall.originY - renderRadius - 20;
+      const badgeText = `${activeBall.shotData.zoneName} • ${activeBall.shotData.distanceFeet} FT`;
       ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
-      const textWidth = ctx.measureText(altText).width;
-      const bW = textWidth + 12;
-      const bH = 17;
-      const bX = indicatorX - bW / 2;
-      const bY = 47 - bH / 2;
+      const textWidth = ctx.measureText(badgeText).width;
+      const padX = 8;
+      const bWidth = textWidth + padX * 2;
+      const bHeight = 19;
+      const bX = activeBall.originX - bWidth / 2;
+      const bY = badgeY - bHeight / 2;
 
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
       ctx.beginPath();
       if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(bX, bY, bW, bH, 8);
+        ctx.roundRect(bX, bY, bWidth, bHeight, 9);
       } else {
-        ctx.rect(bX, bY, bW, bH);
+        ctx.rect(bX, bY, bWidth, bHeight);
       }
       ctx.fill();
 
-      ctx.strokeStyle = '#f97316';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = activeBall.shotData.zoneColor || '#38bdf8';
+      ctx.lineWidth = 1.2;
       ctx.stroke();
 
-      ctx.fillStyle = '#f8fafc';
+      ctx.fillStyle = activeBall.shotData.zoneColor || '#38bdf8';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(altText, indicatorX, 47);
+      ctx.fillText(badgeText, activeBall.originX, badgeY);
       ctx.restore();
+    }
+
+    // 4b. Space Altitude Indicators: for any launched balls in high flight above canvas
+    for (let i = 0; i < balls.length; i++) {
+      const b = balls[i];
+      if (b.isLaunched && b.y < -b.radius && !b.shotData.resolved) {
+        ctx.save();
+        const indicatorX = Math.max(24, Math.min(width - 24, b.x));
+        const heightFt = getBallAltitudeFeet(b.y);
+        const altText = `${heightFt} FT`;
+
+        // Triangle pointer downwards
+        ctx.fillStyle = '#ea580c';
+        ctx.beginPath();
+        ctx.moveTo(indicatorX - 9, 8);
+        ctx.lineTo(indicatorX + 9, 8);
+        ctx.lineTo(indicatorX, 19);
+        ctx.closePath();
+        ctx.fill();
+
+        // Pulsing miniature ball indicator
+        ctx.beginPath();
+        ctx.arc(indicatorX, 29, 7.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#f97316';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Altitude text badge in FT
+        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+        const textWidth = ctx.measureText(altText).width;
+        const bW = textWidth + 12;
+        const bH = 17;
+        const bX = indicatorX - bW / 2;
+        const bY = 47 - bH / 2;
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(bX, bY, bW, bH, 8);
+        } else {
+          ctx.rect(bX, bY, bW, bH);
+        }
+        ctx.fill();
+
+        ctx.strokeStyle = '#f97316';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(altText, indicatorX, 47);
+        ctx.restore();
+      }
     }
 
     // 5. Hoop Front Rim & Net Front Strands (Layered in front of ball!)
@@ -2267,6 +2458,7 @@
   }
 
   function renderPredictiveTrajectory() {
+    if (!activeBall || !State.isAiming) return;
     const launch = computeLaunchVelocity(true);
     if (launch.dragDist < 2 || launch.speed < V_MIN) return;
 
@@ -2281,20 +2473,20 @@
     ctx.lineWidth = 2.5;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
-    ctx.moveTo(ball.originX, ball.originY);
-    ctx.lineTo(ball.originX + dragX, ball.originY + dragY);
+    ctx.moveTo(activeBall.originX, activeBall.originY);
+    ctx.lineTo(activeBall.originX + dragX, activeBall.originY + dragY);
     ctx.stroke();
     ctx.setLineDash([]);
 
     // Tactile slingshot pull bead at ball
     ctx.beginPath();
-    ctx.arc(ball.originX + dragX, ball.originY + dragY, 5, 0, Math.PI * 2);
+    ctx.arc(activeBall.originX + dragX, activeBall.originY + dragY, 5, 0, Math.PI * 2);
     ctx.fillStyle = '#ea580c';
     ctx.fill();
 
     // If touch started away from ball (e.g. thumb on right side), draw subtle tactile reticle at finger
-    const touchDistFromBall = Math.hypot(State.aimStart.x - ball.originX, State.aimStart.y - ball.originY);
-    if (touchDistFromBall > ball.radius * 2.5) {
+    const touchDistFromBall = Math.hypot(State.aimStart.x - activeBall.originX, State.aimStart.y - activeBall.originY);
+    if (touchDistFromBall > activeBall.radius * 2.5) {
       // Touch anchor ring
       ctx.beginPath();
       ctx.arc(State.aimStart.x, State.aimStart.y, 9, 0, Math.PI * 2);
@@ -2324,13 +2516,13 @@
     const totalPoints = getTrajectoryDotCount(State.streak);
     const timeStep = 0.038;
 
-    let prevPx = ball.originX;
-    let prevPy = ball.originY;
+    let prevPx = activeBall.originX;
+    let prevPy = activeBall.originY;
 
     for (let i = 1; i <= totalPoints; i++) {
       const t = i * timeStep;
-      const px = ball.originX + launch.vx * t;
-      const py = ball.originY + launch.vy * t + 0.5 * GRAVITY * t * t;
+      const px = activeBall.originX + launch.vx * t;
+      const py = activeBall.originY + launch.vy * t + 0.5 * GRAVITY * t * t;
 
       // Stop trajectory if below floor
       if (py > height - 12) break;
@@ -2676,8 +2868,10 @@
       }
       State.isAiming = false;
       State.pointerId = null;
-      ball.x = ball.originX;
-      ball.y = ball.originY;
+      if (activeBall && !activeBall.isLaunched) {
+        activeBall.x = activeBall.originX;
+        activeBall.y = activeBall.originY;
+      }
       State.phase = 'IDLE';
       wakeGameLoop();
     }
@@ -2774,6 +2968,8 @@
         flushStateToStorage();
         updateHUD();
         resizeViewport();
+        balls.length = 0;
+        activeBall = null;
         spawnBall(true);
         wakeGameLoop();
       }
@@ -2786,6 +2982,8 @@
         flushStateToStorage();
         updateHUD();
         resizeViewport();
+        balls.length = 0;
+        activeBall = null;
         spawnBall(true);
         wakeGameLoop();
       }
